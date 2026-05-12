@@ -1,32 +1,68 @@
-import { GraduationCap } from 'lucide-react';
+import { useState } from "react";
 
-export default function Layout({ children, title, subtitle }) {
+export default function Layout({
+  children,
+  title,
+  subtitle,
+  sidebar,
+}) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
-              <GraduationCap className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-lg font-black text-slate-900">EduFees</p>
-              <p className="hidden text-xs text-slate-500 sm:block">Teacher Portal</p>
-            </div>
-          </div>
-          <div className="text-sm text-slate-500">Teacher Mode</div>
-        </div>
-      </header>
+    <div className="min-h-screen flex bg-slate-50 overflow-x-hidden">
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {(title || subtitle) && (
-          <div className="mb-6">
-            {title && <h1 className="text-3xl font-black text-slate-900">{title}</h1>}
-            {subtitle && <p className="text-slate-500 mt-1">{subtitle}</p>}
+      {/* SIDEBAR (desktop + mobile drawer) */}
+      {sidebar &&
+        sidebar({
+          open,
+          setOpen,
+        })}
+
+      {/* MAIN */}
+      <div className="flex flex-1 flex-col min-w-0">
+
+        {/* TOP BAR */}
+        <header className="sticky top-0 z-30 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6">
+
+          {/* LEFT */}
+          <div className="flex items-center gap-3 min-w-0">
+
+            {/* MOBILE MENU BUTTON */}
+            {sidebar && (
+              <button
+                onClick={() => setOpen(true)}
+                className="md:hidden text-slate-700 text-xl"
+              >
+                ☰
+              </button>
+            )}
+
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 truncate capitalize">
+                {title}
+              </h1>
+
+              {subtitle && (
+                <p className="text-xs sm:text-sm text-slate-500 truncate">
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
-        )}
-        {children}
-      </main>
+
+          {/* RIGHT */}
+          <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+            T
+          </div>
+
+        </header>
+
+        {/* CONTENT */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full overflow-x-hidden">
+          {children}
+        </main>
+
+      </div>
     </div>
   );
 }

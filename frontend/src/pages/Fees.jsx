@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api/api';
-import { Plus, Check, AlertCircle } from 'lucide-react';
-import Layout from '../components/Layout';
+import { useEffect, useState } from "react";
+import { api } from "../api/api";
+import { Plus, Check, AlertCircle, IndianRupee } from "lucide-react";
+import Layout from "../components/Layout";
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
 ];
 
 export default function Fees() {
@@ -13,105 +13,242 @@ export default function Fees() {
   const [students, setStudents] = useState([]);
   const [batches, setBatches] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ studentId: '', month: MONTHS[new Date().getMonth()], year: new Date().getFullYear(), amount: '', status: 'paid', paymentMethod: 'Cash' });
+
+  const [form, setForm] = useState({
+    studentId: "",
+    month: MONTHS[new Date().getMonth()],
+    year: new Date().getFullYear(),
+    amount: "",
+    status: "paid",
+    paymentMethod: "Cash",
+  });
 
   const load = async () => {
     const f = await api.getFees();
     const s = await api.getStudents();
     const b = await api.getBatches();
-    setFees(f); setStudents(s); setBatches(b);
+    setFees(f);
+    setStudents(s);
+    setBatches(b);
   };
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
+
     const student = students.find(s => s.id === form.studentId);
+
     const record = {
       ...form,
       id: Date.now().toString(),
       batchId: student?.batchId,
       year: Number(form.year),
       amount: Number(form.amount),
-      paidDate: form.status === 'paid' ? new Date().toISOString() : null,
-      paymentMethod: form.status === 'paid' ? form.paymentMethod : null,
+      paidDate: form.status === "paid" ? new Date().toISOString() : null,
     };
+
     await api.addFee(record);
-    setShowForm(false); load();
-  };
 
-  const handleStudentChange = (studentId) => {
-    const student = students.find(s => s.id === studentId);
-    const batch = batches.find(b => b.id === student?.batchId);
+    setShowForm(false);
     setForm({
-      ...form,
-      studentId,
-      month: batch?.startMonth || form.month,
-      year: batch?.startYear || form.year,
-      amount: batch?.monthlyFee ? String(batch.monthlyFee) : form.amount,
+      studentId: "",
+      month: MONTHS[new Date().getMonth()],
+      year: new Date().getFullYear(),
+      amount: "",
+      status: "paid",
+      paymentMethod: "Cash",
     });
+
+    load();
   };
 
-  const toggle = async (fee) => {
-    const next = fee.status === 'paid' ? { status: 'pending' } : { status: 'paid', paidDate: new Date().toISOString(), paymentMethod: 'Cash' };
-    await api.updateFee(fee.id, next);
+  const toggleStatus = async (fee) => {
+    const updated =
+      fee.status === "paid"
+        ? { status: "pending", paidDate: null }
+        : { status: "paid", paidDate: new Date().toISOString() };
+
+    await api.updateFee(fee.id, updated);
     load();
   };
 
   return (
-    <Layout title="Fees Collection">
-      <div className="flex justify-between mb-6">
-        <h1 className="text-3xl font-black">Fees</h1>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl"><Plus className="h-4 w-4" /> Collect Fee</button>
+    <Layout title="Fees" subtitle="Track payments & collections">
+
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+
+        <h2 className="text-xl font-bold text-slate-900">Fee Records</h2>
+
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition"
+        >
+          <Plus size={16} /> Collect Fee
+        </button>
+
       </div>
 
+      {/* FORM */}
       {showForm && (
-        <form onSubmit={submit} className="bg-white p-6 rounded-2xl border mb-6 grid md:grid-cols-2 gap-4">
-          <select value={form.studentId} onChange={e => handleStudentChange(e.target.value)} className="border p-3 rounded-xl" required>
+        <form className="bg-white border rounded-2xl p-4 sm:p-6 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <select
+            value={form.studentId}
+            onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+            className="border rounded-xl p-3"
+            required
+          >
             <option value="">Select Student</option>
             {students.map(s => {
               const batch = batches.find(b => b.id === s.batchId);
-              return <option key={s.id} value={s.id}>{s.name} ({batch?.name || 'No batch'})</option>;
+              return (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({batch?.name || "No batch"})
+                </option>
+              );
             })}
           </select>
-          <select value={form.month} onChange={e => setForm({ ...form, month: e.target.value })} className="border p-3 rounded-xl" required>
-            {MONTHS.map(month => <option key={month} value={month}>{month}</option>)}
+
+          <select
+            value={form.month}
+            onChange={(e) => setForm({ ...form, month: e.target.value })}
+            className="border rounded-xl p-3"
+          >
+            {MONTHS.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
           </select>
-          <input type="number" placeholder="Year" value={form.year} onChange={e => setForm({ ...form, year: e.target.value })} className="border p-3 rounded-xl" required />
-          <input type="number" placeholder="Amount" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="border p-3 rounded-xl" required />
-          <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="border p-3 rounded-xl" required>
+
+          <input
+            type="number"
+            placeholder="Year"
+            value={form.year}
+            onChange={(e) => setForm({ ...form, year: e.target.value })}
+            className="border rounded-xl p-3"
+          />
+
+          <input
+            type="number"
+            placeholder="Amount"
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            className="border rounded-xl p-3"
+          />
+
+          <select
+            value={form.status}
+            onChange={(e) => setForm({ ...form, status: e.target.value })}
+            className="border rounded-xl p-3"
+          >
             <option value="paid">Paid</option>
             <option value="pending">Pending</option>
           </select>
-          <select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })} className="border p-3 rounded-xl" disabled={form.status !== 'paid'}>
-            <option value="Cash">Cash</option>
-            <option value="UPI">UPI</option>
-            <option value="Bank Transfer">Bank Transfer</option>
-            <option value="Card">Card</option>
+
+          <select
+            value={form.paymentMethod}
+            onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+            className="border rounded-xl p-3"
+            disabled={form.status !== "paid"}
+          >
+            <option>Cash</option>
+            <option>UPI</option>
+            <option>Bank Transfer</option>
+            <option>Card</option>
           </select>
-          <div className="md:col-span-2 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Select a student to auto-fill the batch starting month and monthly fee. You can still change month/year if collecting fees for another month.
+
+          {/* buttons */}
+          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
+
+            <button
+              onClick={submit}
+              className="w-full sm:w-auto bg-green-600 text-white px-5 py-2 rounded-xl hover:bg-green-700"
+            >
+              Save
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="w-full sm:w-auto border px-5 py-2 rounded-xl"
+            >
+              Cancel
+            </button>
+
           </div>
-          <div className="md:col-span-2 flex gap-3">
-            <button type="submit" className="bg-emerald-600 text-white px-6 py-2 rounded-xl">Save</button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2">Cancel</button>
-          </div>
+
         </form>
       )}
 
-      <div className="bg-white rounded-2xl border overflow-hidden">
-        {fees.map(f => (
-          <div key={f.id} className="flex justify-between p-4 border-b">
-            <div>
-              <p className="font-bold">{students.find(s => s.id === f.studentId)?.name || 'Unknown'}</p>
-              <p className="text-sm text-slate-500">Fees for {f.month} {f.year}</p>
+      {/* FEES CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {fees.map(f => {
+          const student = students.find(s => s.id === f.studentId);
+
+          return (
+            <div
+              key={f.id}
+              className="bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition"
+            >
+
+              {/* TOP */}
+              <div className="flex justify-between items-start">
+
+                <div>
+                  <p className="font-bold text-slate-900">
+                    {student?.name || "Unknown"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {f.month} {f.year}
+                  </p>
+                </div>
+
+                {f.status === "paid" ? (
+                  <Check className="text-green-600" />
+                ) : (
+                  <AlertCircle className="text-amber-500" />
+                )}
+
+              </div>
+
+              {/* AMOUNT */}
+              <div className="mt-4 flex items-center gap-2">
+                <IndianRupee className="text-slate-400" size={18} />
+                <p className="text-xl font-bold">₹{f.amount}</p>
+              </div>
+
+              {/* FOOTER */}
+              <div className="mt-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+
+                <span
+                  className={`text-xs px-3 py-1 rounded-full font-medium w-fit ${
+                    f.status === "paid"
+                      ? "bg-green-50 text-green-600"
+                      : "bg-amber-50 text-amber-600"
+                  }`}
+                >
+                  {f.status.toUpperCase()}
+                </span>
+
+                <button
+                  onClick={() => toggleStatus(f)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 w-fit"
+                >
+                  Toggle Status
+                </button>
+
+              </div>
+
             </div>
-            <div className="flex items-center gap-4">
-              <span className="font-black">₹{f.amount}</span>
-              <button onClick={() => toggle(f)} className="text-sm text-emerald-600">{f.status === 'paid' ? <Check className="inline" /> : <AlertCircle className="inline" />} Mark {f.status === 'paid' ? 'Pending' : 'Paid'}</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
+
       </div>
+
     </Layout>
   );
 }
