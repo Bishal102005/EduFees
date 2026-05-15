@@ -37,7 +37,7 @@ app.post('/api/auth/login', async (req, res) => {
           token: 'teacher-session-token'
         });
       } else {
-        return res.status(401).json({ success: false, message: 'Invalid password' });
+        return res.status(401).json({ success: false, message: 'Incorrect password' });
       }
     }
 
@@ -161,11 +161,11 @@ app.get('/api/students', async (req, res) => {
 });
 
 app.post('/api/students', async (req, res) => {
-  const { name, mobile, email, address, batchId } = req.body;
+  const { name, mobile, email, address, batchId, discount, finalFee } = req.body;
   try {
     const { data, error } = await supabase
       .from('students')
-      .insert([{ name, mobile, email, address, batch_id: batchId }])
+      .insert([{ name, mobile, email, address, batch_id: batchId, discount, final_fee: finalFee }])
       .select()
       .single();
 
@@ -178,11 +178,11 @@ app.post('/api/students', async (req, res) => {
 
 app.put('/api/students/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, mobile, email, address, batchId } = req.body;
+  const { name, mobile, email, address, batchId, discount, finalFee } = req.body;
   try {
     const { data, error } = await supabase
       .from('students')
-      .update({ name, mobile, email, address, batch_id: batchId })
+      .update({ name, mobile, email, address, batch_id: batchId, discount, final_fee: finalFee })
       .eq('id', id)
       .select()
       .single();

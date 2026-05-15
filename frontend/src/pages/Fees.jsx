@@ -98,7 +98,15 @@ export default function Fees() {
 
           <select
             value={form.studentId}
-            onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+            onChange={(e) => {
+              const sId = e.target.value;
+              const student = students.find(s => s.id === sId);
+              setForm({ 
+                ...form, 
+                studentId: sId,
+                amount: student ? student.finalFee : ""
+              });
+            }}
             className="border rounded-xl p-3"
             required
           >

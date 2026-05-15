@@ -90,8 +90,9 @@ export default function StudentDashboard({ studentId, onLogout }) {
     .reduce((a, b) => a + b.amount, 0);
 
   const expectedMonths = monthsFromBatchStart(batch);
+  const monthlyRate = student.finalFee || (batch ? Number(batch.monthlyFee) : 0);
   const expectedFee = batch
-    ? expectedMonths * Number(batch.monthlyFee || 0)
+    ? expectedMonths * monthlyRate
     : totalPaid;
 
   const pending = Math.max(0, expectedFee - totalPaid);
@@ -174,9 +175,12 @@ export default function StudentDashboard({ studentId, onLogout }) {
                 <p><span className="text-gray-400">Name:</span> {batch.name}</p>
                 <p><span className="text-gray-400">Subject:</span> {batch.subject}</p>
                 <p><span className="text-gray-400">Schedule:</span> {batch.schedule}</p>
-                <p className="text-indigo-400 font-bold mt-2">
-                  ₹{batch.monthlyFee}/month
-                </p>
+                <div className="mt-2">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">My Monthly Fee</p>
+                  <p className="text-indigo-400 font-bold text-lg">
+                    ₹{student.finalFee || batch.monthlyFee}
+                  </p>
+                </div>
               </div>
             ) : (
               <p className="text-gray-400">No batch assigned</p>

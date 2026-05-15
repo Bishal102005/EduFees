@@ -24,8 +24,14 @@ CREATE TABLE IF NOT EXISTS public.students (
     email TEXT,
     address TEXT,
     batch_id UUID REFERENCES public.batches(id) ON DELETE SET NULL,
+    discount NUMERIC NOT NULL DEFAULT 0,
+    final_fee NUMERIC NOT NULL DEFAULT 0,
     join_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add columns if they don't exist (for existing tables)
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.students ADD COLUMN IF NOT EXISTS final_fee NUMERIC NOT NULL DEFAULT 0;
 
 -- 3. Create Fees Records Table
 CREATE TABLE IF NOT EXISTS public.fees_records (

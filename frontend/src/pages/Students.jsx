@@ -9,6 +9,8 @@ const emptyForm = {
   email: "",
   address: "",
   batchId: "",
+  discount: 0,
+  finalFee: 0,
 };
 
 export default function Students() {
@@ -54,6 +56,8 @@ export default function Students() {
       email: s.email,
       address: s.address,
       batchId: s.batchId,
+      discount: s.discount || 0,
+      finalFee: s.finalFee || 0,
     });
     setShowForm(true);
   };
@@ -111,16 +115,56 @@ export default function Students() {
 
           <select
             value={form.batchId}
-            onChange={(e) => setForm({ ...form, batchId: e.target.value })}
-            className="border rounded-xl p-3 w-full sm:col-span-2"
+            onChange={(e) => {
+              const bId = e.target.value;
+              const batch = batches.find(b => b.id === bId);
+              const fee = batch ? batch.monthlyFee : 0;
+              setForm({ 
+                ...form, 
+                batchId: bId,
+                finalFee: Math.max(0, fee - form.discount)
+              });
+            }}
+            className="border rounded-xl p-3 w-full"
           >
             <option value="">Select Batch</option>
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name}
+                {b.name} (₹{b.monthlyFee})
               </option>
             ))}
           </select>
+
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="text-xs text-slate-500 ml-1">Deduct (₹)</label>
+              <input
+                type="number"
+                placeholder="Deduct"
+                value={form.discount}
+                onChange={(e) => {
+                  const disc = Number(e.target.value);
+                  const batch = batches.find(b => b.id === form.batchId);
+                  const fee = batch ? batch.monthlyFee : 0;
+                  setForm({ 
+                    ...form, 
+                    discount: disc,
+                    finalFee: Math.max(0, fee - disc)
+                  });
+                }}
+                className="border rounded-xl p-3 w-full"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-slate-500 ml-1">Final Fee (₹)</label>
+              <input
+                type="number"
+                value={form.finalFee}
+                readOnly
+                className="border rounded-xl p-3 w-full bg-slate-50 font-bold text-indigo-600"
+              />
+            </div>
+          </div>
 
           <input
             placeholder="Address"
@@ -189,7 +233,11 @@ export default function Students() {
             {/* INFO */}
             <div className="mt-4 text-xs sm:text-sm text-slate-500 space-y-1">
               <p>Email: {s.email || "N/A"}</p>
-              <p>Batch: {s.batchId || "Not assigned"}</p>
+              <p>Batch: {batches.find(b => b.id === s.batchId)?.name || "Not assigned"}</p>
+              <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg mt-2">
+                <span>Custom Fee:</span>
+                <span className="font-bold text-indigo-600">₹{s.finalFee}</span>
+              </div>
             </div>
 
             {/* ACTIONS */}

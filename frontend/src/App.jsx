@@ -39,15 +39,25 @@ function LoginScreen({ onAuth }) {
   };
 
   return (
-    <div style={{
+    <div className="login-container" style={{
       minHeight: '100vh',
       width: '100%',
       display: 'flex',
       background: '#080e1a',
       fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
-      overflow: 'hidden',
+      overflowX: 'hidden',
       position: 'relative',
     }}>
+
+      <style>{`
+        .login-container { flex-direction: row; }
+        @media (max-width: 1024px) {
+          .login-container { flex-direction: column; }
+          .login-left-panel { display: none !important; }
+          .login-right-panel { width: 100% !important; padding: 2rem 1.5rem !important; min-height: 100vh; }
+          .mobile-only-brand { display: block !important; }
+        }
+      `}</style>
 
       {/* ── LEFT PANEL ── */}
       <div style={{
@@ -152,7 +162,7 @@ function LoginScreen({ onAuth }) {
       </div>
 
       {/* ── RIGHT PANEL ── */}
-      <div style={{
+      <div className="login-right-panel" style={{
         width: '480px',
         flexShrink: 0,
         display: 'flex',
@@ -172,6 +182,24 @@ function LoginScreen({ onAuth }) {
         }} />
 
         <div style={{ width: '100%', maxWidth: '380px', position: 'relative', zIndex: 1 }}>
+
+          {/* MOBILE BRANDING */}
+          <div className="mobile-only-brand" style={{ display: 'none', marginBottom: '2.5rem', textAlign: 'center' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '12px',
+                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(99,102,241,0.3)',
+              }}>
+                <GraduationCap size={20} color="#fff" />
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontWeight: 800, fontSize: '1.25rem', color: '#f1f5f9', lineHeight: 1 }}>EduFees</div>
+                <div style={{ fontSize: '0.65rem', color: '#475569', fontWeight: 600, textTransform: 'uppercase' }}>Management</div>
+              </div>
+            </div>
+          </div>
 
           <AnimatePresence mode="wait">
 
@@ -217,7 +245,7 @@ function LoginScreen({ onAuth }) {
                       <Shield size={20} color="#fff" />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem' }}>Teacher / Admin</div>
+                      <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: '0.95rem' }}>Teacher</div>
                       <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '2px' }}>Full access · Manage students & fees</div>
                     </div>
                     <ArrowRight size={16} color="#4f5980" />
@@ -427,6 +455,7 @@ function LoginScreen({ onAuth }) {
 export default function App() {
   const [auth, setAuth]           = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const handleLogout = () => { setAuth(null); setActiveTab('overview'); };
 
   if (!auth) return <LoginScreen onAuth={setAuth} />;
@@ -434,9 +463,64 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden" style={{ background: '#f1f5f9' }}>
+      
+      <style>{`
+        @media (max-width: 1024px) {
+          .desktop-sidebar { 
+            position: fixed; 
+            z-index: 100; 
+            transform: translateX(${isSidebarOpen ? '0' : '-100%'});
+            transition: transform 0.3s ease;
+          }
+          .main-content { padding-top: 60px !important; }
+          .mobile-header { display: flex !important; }
+        }
+      `}</style>
+
+      {/* MOBILE HEADER */}
+      <header className="mobile-header" style={{
+        display: 'none',
+        position: 'fixed',
+        top: 0, left: 0, right: 0,
+        height: '60px',
+        background: '#0d1117',
+        alignItems: 'center',
+        padding: '0 1rem',
+        zIndex: 50,
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        justifyContent: 'space-between'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{
+            width: '32px', height: '32px', borderRadius: '8px',
+            background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <GraduationCap size={16} color="#fff" />
+          </div>
+          <span style={{ fontWeight: 800, color: '#fff', fontSize: '1rem' }}>EduFees</span>
+        </div>
+
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          style={{ background: 'none', border: 'none', color: '#fff' }}
+        >
+          <TrendingUp size={24} style={{ transform: 'rotate(90deg)' }} />
+        </button>
+      </header>
+
+      {/* Sidebar Overlay (Mobile) */}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 90
+          }}
+        />
+      )}
 
       {/* Sidebar */}
-      <aside style={{
+      <aside className="desktop-sidebar" style={{
         width: '256px', flexShrink: 0, height: '100%',
         display: 'flex', flexDirection: 'column',
         background: 'linear-gradient(180deg, #0d1117 0%, #0f172a 100%)',
@@ -464,12 +548,19 @@ export default function App() {
 
         {/* Nav */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
+          <Sidebar 
+            activeTab={activeTab} 
+            onTabChange={(tab) => {
+              setActiveTab(tab);
+              setIsSidebarOpen(false);
+            }} 
+            onLogout={handleLogout} 
+          />
         </div>
       </aside>
 
       {/* Main */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="main-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
 
 
 

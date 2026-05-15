@@ -3,13 +3,18 @@ import { api } from "../api/api";
 import { Plus, Edit3, Trash2, BookOpen } from "lucide-react";
 import Layout from "../components/Layout";
 
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
+
 const emptyForm = {
   name: "",
   subject: "",
   schedule: "",
   monthlyFee: "",
-  startMonth: "",
-  startYear: "",
+  startMonth: MONTHS[new Date().getMonth()],
+  startYear: new Date().getFullYear().toString(),
 };
 
 export default function Batches() {
@@ -119,12 +124,15 @@ export default function Batches() {
             className="border rounded-xl p-3 w-full"
           />
 
-          <input
-            placeholder="Start Month"
+          <select
             value={form.startMonth}
             onChange={(e) => setForm({ ...form, startMonth: e.target.value })}
             className="border rounded-xl p-3 w-full"
-          />
+          >
+            {MONTHS.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
 
           <input
             type="number"

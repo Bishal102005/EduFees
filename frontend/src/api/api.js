@@ -92,6 +92,8 @@ function mapStudent(s) {
     email: s.email || '',
     address: s.address || '',
     batchId: s.batch_id,
+    discount: Number(s.discount || 0),
+    finalFee: Number(s.final_fee || 0),
     joinDate: s.join_date,
   };
 }
@@ -115,11 +117,11 @@ export const api = {
   async login(role, credentials) {
     if (role === 'teacher') {
       const password = credentials.password;
-      const stored = localStorage.getItem('fees_teacher_password') || 'teacher123';
+      const stored = 'admin';
       if (password === stored) {
         return { success: true, auth: { role: 'teacher', userId: 'teacher' } };
       }
-      return { success: false, error: 'Invalid password. Default: teacher123' };
+      return { success: false, error: 'Incorrect password' };
     }
 
     // Student login
@@ -256,7 +258,15 @@ export const api = {
       try {
         const { data, error } = await supabase
           .from('students')
-          .insert([{ name: student.name, mobile: student.mobile, email: student.email, address: student.address, batch_id: student.batchId }])
+          .insert([{ 
+            name: student.name, 
+            mobile: student.mobile, 
+            email: student.email, 
+            address: student.address, 
+            batch_id: student.batchId,
+            discount: student.discount,
+            final_fee: student.finalFee
+          }])
           .select()
           .single();
         if (!error && data) return mapStudent(data);
@@ -275,7 +285,15 @@ export const api = {
       try {
         const { data, error } = await supabase
           .from('students')
-          .update({ name: student.name, mobile: student.mobile, email: student.email, address: student.address, batch_id: student.batchId })
+          .update({ 
+            name: student.name, 
+            mobile: student.mobile, 
+            email: student.email, 
+            address: student.address, 
+            batch_id: student.batchId,
+            discount: student.discount,
+            final_fee: student.finalFee
+          })
           .eq('id', id)
           .select()
           .single();
