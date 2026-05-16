@@ -157,7 +157,7 @@ function LoginScreen({ onAuth }) {
 
         {/* Footer note */}
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p style={{ fontSize: '0.75rem', color: '#334155' }}>© 2025 EduFees · Secure · Reliable · Fast</p>
+          <p style={{ fontSize: '0.75rem', color: '#334155' }}>©  2026 BS Creation — All rights reserved</p>
         </div>
       </div>
 
