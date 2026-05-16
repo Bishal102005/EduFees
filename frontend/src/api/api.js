@@ -254,6 +254,41 @@ export const api = {
   },
 
   async addStudent(student) {
+    const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students`;
+    console.log(`[API] Attempting to add student via backend: ${backendUrl}`);
+    
+    // Try backend first (triggers welcome email)
+    try {
+      const res = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: student.name,
+          mobile: student.mobile,
+          email: student.email,
+          address: student.address,
+          batchId: student.batchId,
+          discount: student.discount,
+          finalFee: student.finalFee,
+        }),
+      });
+
+      if (res.ok) {
+        console.log('[API] Backend response OK, student added and email triggered.');
+        const data = await res.json();
+        return mapStudent(data);
+      } else {
+        console.warn(`[API] Backend returned status ${res.status}: ${res.statusText}`);
+        if (res.status === 404) {
+          console.error('[API] 404 error: The endpoint /api/students was not found on the backend server. Check if the backend is running correctly.');
+        }
+      }
+    } catch (e) {
+      console.warn('[API] Backend unreachable or request failed. Falling back to direct Supabase insert (no email will be sent). Error:', e.message);
+    }
+
+    // Fallback: direct Supabase insert (no email)
+    console.log('[API] Falling back to direct Supabase insert...');
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
@@ -269,11 +304,17 @@ export const api = {
           }])
           .select()
           .single();
-        if (!error && data) return mapStudent(data);
+        if (!error && data) {
+          console.log('[API] Student added directly to Supabase.');
+          return mapStudent(data);
+        }
+        if (error) console.error('[API] Supabase insert error:', error.message);
       } catch (e) {
-        console.error(e);
+        console.error('[API] Supabase insert failed:', e.message);
       }
     }
+    
+    // Final fallback to localStorage
     const list = JSON.parse(localStorage.getItem('fees_students') || '[]');
     list.push(student);
     localStorage.setItem('fees_students', JSON.stringify(list));
