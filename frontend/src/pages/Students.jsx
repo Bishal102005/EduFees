@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/api";
 import { Plus, Edit3, Trash2, User } from "lucide-react";
 import Layout from "../components/Layout";
+import ConfirmModal from "../components/ConfirmModal";
 
 const emptyForm = {
   name: "",
@@ -19,6 +20,7 @@ export default function Students() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, studentId: null, studentName: "" });
 
   const load = async () => {
     const s = await api.getStudents();
@@ -63,14 +65,28 @@ export default function Students() {
   };
 
   const del = async (id) => {
-    if (confirm("Delete student?")) {
-      await api.deleteStudent(id);
+    const student = students.find(s => s.id === id);
+    setDeleteModal({ isOpen: true, studentId: id, studentName: student?.name || "this student" });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteModal.studentId) {
+      await api.deleteStudent(deleteModal.studentId);
       load();
     }
   };
 
   return (
     <Layout title="Students" subtitle="Manage all enrolled students">
+
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Student?"
+        message={`Are you sure you want to delete ${deleteModal.studentName}? This action will remove all their records permanently.`}
+        confirmText="Yes, Delete"
+      />
 
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
