@@ -5,7 +5,7 @@ const isSupabaseConfigured = Boolean(
 );
 
 // Auto-seed demo data into Supabase if tables are empty
-async function seedDemoDataIfEmpty() {
+/*async function seedDemoDataIfEmpty() {
   if (!isSupabaseConfigured) return;
 
   try {
@@ -65,7 +65,7 @@ async function seedDemoDataIfEmpty() {
   } catch (err) {
     console.warn('[Supabase] Seeding failed (tables may not exist yet):', err.message);
   }
-}
+}*/
 
 // Run seeding on app load
 // seedDemoDataIfEmpty();
@@ -161,15 +161,19 @@ export const api = {
 
   // Batches
   async getBatches() {
+    const demoBatches = ['Morning Math Batch', 'Evening Science Batch', 'Weekend English Batch'];
+    let rawBatches = [];
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('batches').select('*').order('created_at', { ascending: false });
-        if (!error && data) return data.map(mapBatch);
+        if (!error && data) rawBatches = data.map(mapBatch);
       } catch (e) {
         console.error(e);
       }
+    } else {
+      rawBatches = JSON.parse(localStorage.getItem('fees_batches') || '[]');
     }
-    return JSON.parse(localStorage.getItem('fees_batches') || '[]');
+    return rawBatches.filter(b => !demoBatches.includes(b.name));
   },
 
   async addBatch(batch) {
@@ -241,22 +245,29 @@ export const api = {
 
   // Students
   async getStudents() {
+    const demoMobiles = ['9876543210', '9876543211', '9876543212', '9876543213', '9876543214'];
+    const demoNames = ['Rahul Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Gupta', 'Vikram Singh', 'Test Student Pro', 'Test Student'];
+    const isDemo = (s) => demoMobiles.includes(s.mobile) || demoNames.includes(s.name);
+
+    let rawStudents = [];
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('students').select('*').order('join_date', { ascending: false });
-        if (!error && data) return data.map(mapStudent);
+        if (!error && data) rawStudents = data.map(mapStudent);
         if (error) console.warn('Supabase students error:', error.message);
       } catch (e) {
         console.warn('Supabase students fetch failed, using localStorage');
       }
+    } else {
+      rawStudents = JSON.parse(localStorage.getItem('fees_students') || '[]');
     }
-    return JSON.parse(localStorage.getItem('fees_students') || '[]');
+    return rawStudents.filter(s => !isDemo(s));
   },
 
   async addStudent(student) {
     const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students`;
     console.log(`[API] Attempting to add student via backend: ${backendUrl}`);
-    
+
     // Try backend first (triggers welcome email)
     try {
       const res = await fetch(backendUrl, {
@@ -293,11 +304,11 @@ export const api = {
       try {
         const { data, error } = await supabase
           .from('students')
-          .insert([{ 
-            name: student.name, 
-            mobile: student.mobile, 
-            email: student.email, 
-            address: student.address, 
+          .insert([{
+            name: student.name,
+            mobile: student.mobile,
+            email: student.email,
+            address: student.address,
             batch_id: student.batchId,
             discount: student.discount,
             final_fee: student.finalFee
@@ -313,7 +324,7 @@ export const api = {
         console.error('[API] Supabase insert failed:', e.message);
       }
     }
-    
+
     // Final fallback to localStorage
     const list = JSON.parse(localStorage.getItem('fees_students') || '[]');
     list.push(student);
@@ -326,11 +337,11 @@ export const api = {
       try {
         const { data, error } = await supabase
           .from('students')
-          .update({ 
-            name: student.name, 
-            mobile: student.mobile, 
-            email: student.email, 
-            address: student.address, 
+          .update({
+            name: student.name,
+            mobile: student.mobile,
+            email: student.email,
+            address: student.address,
             batch_id: student.batchId,
             discount: student.discount,
             final_fee: student.finalFee
@@ -365,15 +376,22 @@ export const api = {
 
   // Fees
   async getFees() {
+    let rawFees = [];
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase.from('fees_records').select('*').order('created_at', { ascending: false });
-        if (!error && data) return data.map(mapFee);
+        if (!error && data) rawFees = data.map(mapFee);
       } catch (e) {
         console.error(e);
       }
+    } else {
+      rawFees = JSON.parse(localStorage.getItem('fees_records') || '[]');
     }
-    return JSON.parse(localStorage.getItem('fees_records') || '[]');
+
+    // Filter out fees associated with demo students
+    const activeStudents = await api.getStudents();
+    const activeStudentIds = new Set(activeStudents.map(s => s.id));
+    return rawFees.filter(f => activeStudentIds.has(f.studentId));
   },
 
   async addFee(fee) {

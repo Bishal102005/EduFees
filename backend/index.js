@@ -118,7 +118,7 @@ async function sendWelcomeEmail(studentName, studentEmail) {
 app.get('/api/health', (req, res) => {
   const url = process.env.SUPABASE_URL || '';
   const key = process.env.SUPABASE_ANON_KEY || '';
-  
+
   res.json({
     status: 'ok',
     env: {
@@ -297,7 +297,7 @@ app.post('/api/students', async (req, res) => {
       .single();
 
     if (error) throw error;
-    
+
     // Send welcome email (asynchronously)
     if (data && data.email) {
       await sendWelcomeEmail(data.name, data.email);
