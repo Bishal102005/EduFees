@@ -24,14 +24,24 @@ app.use((req, res, next) => {
 });
 
 // Initialize Supabase Client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+let supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('CRITICAL ERROR: SUPABASE_URL and SUPABASE_ANON_KEY must be set in environmental variables!');
 }
 
-const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+// Self-healing: Strip trailing PostgREST path suffix or slashes if accidentally included in Vercel configuration
+if (supabaseUrl.endsWith('/rest/v1/')) {
+  supabaseUrl = supabaseUrl.slice(0, -9);
+} else if (supabaseUrl.endsWith('/rest/v1')) {
+  supabaseUrl = supabaseUrl.slice(0, -8);
+}
+if (supabaseUrl.endsWith('/')) {
+  supabaseUrl = supabaseUrl.slice(0, -1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Email Transporter
 const transporter = nodemailer.createTransport({
