@@ -104,6 +104,22 @@ async function sendWelcomeEmail(studentName, studentEmail) {
   }
 }
 
+// Health & Environment Diagnostics Endpoint
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    env: {
+      SUPABASE_URL_SET: !!process.env.SUPABASE_URL,
+      SUPABASE_ANON_KEY_SET: !!process.env.SUPABASE_ANON_KEY,
+      EMAIL_USER_SET: !!process.env.EMAIL_USER,
+      EMAIL_PASS_SET: !!process.env.EMAIL_PASS ? 'SET (length: ' + process.env.EMAIL_PASS.length + ')' : 'NOT SET',
+      TEACHER_PASSWORD_SET: !!process.env.TEACHER_PASSWORD,
+      APP_URL: process.env.APP_URL || 'not set',
+      NODE_ENV: process.env.NODE_ENV || 'not set'
+    }
+  });
+});
+
 // Authentication API
 app.post('/api/auth/login', async (req, res) => {
   const { role, password, mobile } = req.body;
