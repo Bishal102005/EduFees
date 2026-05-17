@@ -106,11 +106,30 @@ async function sendWelcomeEmail(studentName, studentEmail) {
 
 // Health & Environment Diagnostics Endpoint
 app.get('/api/health', (req, res) => {
+  const url = process.env.SUPABASE_URL || '';
+  const key = process.env.SUPABASE_ANON_KEY || '';
+  
   res.json({
     status: 'ok',
     env: {
-      SUPABASE_URL_SET: !!process.env.SUPABASE_URL,
-      SUPABASE_ANON_KEY_SET: !!process.env.SUPABASE_ANON_KEY,
+      SUPABASE_URL: {
+        set: !!url,
+        length: url.length,
+        prefix: url.substring(0, 15),
+        suffix: url.substring(url.length - 5),
+        hasSpaces: /\s/.test(url),
+        hasCarriageReturn: /\r/.test(url),
+        hasNewline: /\n/.test(url)
+      },
+      SUPABASE_ANON_KEY: {
+        set: !!key,
+        length: key.length,
+        prefix: key.substring(0, 15),
+        suffix: key.substring(key.length - 15),
+        hasSpaces: /\s/.test(key),
+        hasCarriageReturn: /\r/.test(key),
+        hasNewline: /\n/.test(key)
+      },
       EMAIL_USER_SET: !!process.env.EMAIL_USER,
       EMAIL_PASS_SET: !!process.env.EMAIL_PASS ? 'SET (length: ' + process.env.EMAIL_PASS.length + ')' : 'NOT SET',
       TEACHER_PASSWORD_SET: !!process.env.TEACHER_PASSWORD,
