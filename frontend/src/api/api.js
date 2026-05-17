@@ -68,7 +68,7 @@ async function seedDemoDataIfEmpty() {
 }
 
 // Run seeding on app load
-seedDemoDataIfEmpty();
+// seedDemoDataIfEmpty();
 
 // Helper to map snake_case to camelCase
 function mapBatch(b) {
