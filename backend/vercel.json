@@ -11,5 +11,11 @@
       "src": "/(.*)",
       "dest": "index.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/send-monthly-pending?secret=super_secret_cron_token_123",
+      "schedule": "0 0 1 * *"
+    }
   ]
 }

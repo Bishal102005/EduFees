@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
+import { sendSMS } from './smsService.js';
+
 
 dotenv.config();
 
@@ -416,6 +418,204 @@ app.delete('/api/fees/:id', async (req, res) => {
     res.json({ success: true, message: 'Fee record deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ── SMS DUES CALCULATION HELPER ──────────────────────────────────────────────
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+async function calculatePendingBalances(specificStudentId = null) {
+  // Fetch active students
+  let studentQuery = supabase.from('students').select('*');
+  if (specificStudentId) {
+    studentQuery = studentQuery.eq('id', specificStudentId);
+  }
+  const { data: students, error: studentErr } = await studentQuery;
+  if (studentErr) throw studentErr;
+
+  // Fetch batches
+  const { data: batches, error: batchErr } = await supabase.from('batches').select('*');
+  if (batchErr) throw batchErr;
+
+  // Fetch all fees records
+  const { data: fees, error: feeErr } = await supabase.from('fees_records').select('*');
+  if (feeErr) throw feeErr;
+
+  const now = new Date();
+  const currentMonthIdx = now.getMonth(); // 0-11
+  const currentYear = now.getFullYear();
+
+  const pendingStudentsList = [];
+
+  students.forEach(student => {
+    // Exclude demo students to avoid spamming or fake records
+    const demoMobiles = ['9876543210', '9876543211', '9876543212', '9876543213', '9876543214'];
+    const demoNames = ['Rahul Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Gupta', 'Vikram Singh', 'Test Student Pro', 'Test Student'];
+    if (demoMobiles.includes(student.mobile) || demoNames.includes(student.name)) {
+      return;
+    }
+
+    const batch = batches.find(b => b.id === student.batch_id);
+    if (!batch) return;
+
+    const targetAmount = Number(student.final_fee || batch.monthly_fee || 0);
+
+    // Start from batch start month or join date
+    let iterMonth = MONTHS.indexOf(batch.start_month);
+    let iterYear = Number(batch.start_year || currentYear);
+
+    if (iterMonth < 0 || !iterYear) {
+      const joinDate = new Date(student.join_date || student.created_at);
+      iterMonth = joinDate.getMonth();
+      iterYear = joinDate.getFullYear();
+    }
+
+    let totalPendingAmount = 0;
+
+    // Loop through each month/year from start to current
+    while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
+      const monthName = MONTHS[iterMonth];
+
+      const records = fees.filter(f => 
+        f.student_id === student.id &&
+        f.month === monthName &&
+        f.year === iterYear
+      );
+
+      const paidSum = records
+        .filter(f => f.status === 'paid')
+        .reduce((sum, f) => sum + Number(f.amount), 0);
+
+      const pendingBalance = targetAmount - paidSum;
+      if (pendingBalance > 0) {
+        totalPendingAmount += pendingBalance;
+      }
+
+      iterMonth++;
+      if (iterMonth > 11) {
+        iterMonth = 0;
+        iterYear++;
+      }
+    }
+
+    // Only add to pending if the balance is strictly greater than 0
+    if (totalPendingAmount > 0) {
+      pendingStudentsList.push({
+        id: student.id,
+        name: student.name,
+        mobile: student.mobile,
+        email: student.email || '',
+        pendingAmount: totalPendingAmount
+      });
+    }
+  });
+
+  return pendingStudentsList;
+}
+
+// ── SMS ENDPOINTS ────────────────────────────────────────────────────────────
+
+// 1. Manual trigger endpoint (for specific student or bulk all students)
+app.post('/api/sms/send-pending-manual', async (req, res) => {
+  const { studentId } = req.body || {};
+  try {
+    const pendingStudents = await calculatePendingBalances(studentId);
+    
+    if (pendingStudents.length === 0) {
+      return res.json({
+        success: true,
+        message: studentId ? 'Student has 0 pending dues. No SMS was sent.' : 'No students have outstanding pending balances. 0 SMS sent.',
+        sentCount: 0,
+        results: []
+      });
+    }
+
+    const results = [];
+    for (const student of pendingStudents) {
+      const result = await sendSMS({
+        to: student.mobile,
+        studentName: student.name,
+        amount: student.pendingAmount,
+        email: student.email
+      });
+      results.push({
+        studentId: student.id,
+        name: student.name,
+        mobile: student.mobile,
+        amount: student.pendingAmount,
+        success: result.success,
+        provider: result.provider,
+        error: result.error || null
+      });
+    }
+
+    const successfulSends = results.filter(r => r.success).length;
+
+    res.json({
+      success: true,
+      message: `Successfully processed reminders. Sent ${successfulSends}/${results.length} SMS.`,
+      sentCount: successfulSends,
+      results
+    });
+  } catch (error) {
+    console.error('Error in sending manual SMS:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Cron scheduled endpoint (receives request from Vercel Cron at month end)
+app.post('/api/cron/send-monthly-pending', async (req, res) => {
+  const reqSecret = req.query.secret;
+  const cronSecret = process.env.CRON_SECRET || 'super_secret_cron_token_123';
+
+  // Security guard to prevent unauthorized trigger of SMS bulk runs
+  if (reqSecret !== cronSecret) {
+    return res.status(401).json({ success: false, message: 'Unauthorized. Invalid CRON_SECRET.' });
+  }
+
+  try {
+    console.log('[CRON JOB] Starting monthly pending dues SMS dispatch run...');
+    const pendingStudents = await calculatePendingBalances();
+
+    if (pendingStudents.length === 0) {
+      console.log('[CRON JOB] 0 students with outstanding dues. No SMS sent.');
+      return res.json({
+        success: true,
+        message: 'Completed cron run. No students with outstanding balances.',
+        sentCount: 0
+      });
+    }
+
+    const results = [];
+    for (const student of pendingStudents) {
+      const result = await sendSMS({
+        to: student.mobile,
+        studentName: student.name,
+        amount: student.pendingAmount,
+        email: student.email
+      });
+      results.push({
+        studentId: student.id,
+        name: student.name,
+        success: result.success
+      });
+    }
+
+    const successfulSends = results.filter(r => r.success).length;
+    console.log(`[CRON JOB] Monthly dispatch complete. Sent ${successfulSends}/${results.length} SMS successfully.`);
+
+    res.json({
+      success: true,
+      message: `Monthly Cron dispatch finished. Sent ${successfulSends} SMS reminders.`,
+      sentCount: successfulSends
+    });
+  } catch (error) {
+    console.error('[CRON JOB] Error in monthly cron run:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

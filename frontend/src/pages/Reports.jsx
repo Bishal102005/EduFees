@@ -8,6 +8,9 @@ import {
   IndianRupee,
   AlertCircle,
   Calendar,
+  Send,
+  Smartphone,
+  Sparkles,
 } from "lucide-react";
 
 const MONTHS = [
@@ -27,6 +30,74 @@ export default function Reports() {
     month: "All Months",
     year: "All Years",
   });
+
+  const [sendingSms, setSendingSms] = useState(false);
+  const [smsStatus, setSmsStatus] = useState(null);
+  const [sendingIndividual, setSendingIndividual] = useState({});
+  const [sentSmsLogs, setSentSmsLogs] = useState([]);
+
+  const handleSendAllSMS = async () => {
+    setSendingSms(true);
+    setSmsStatus(null);
+    try {
+      const res = await api.sendPendingSMS();
+      if (res.success) {
+        if (res.results && res.results.length > 0) {
+          setSentSmsLogs(prev => [...res.results, ...prev]);
+        }
+        setSmsStatus({
+          type: "success",
+          message: res.message || `Successfully sent ${res.sentCount} SMS reminders!`
+        });
+        // Clear message after 8 seconds
+        setTimeout(() => setSmsStatus(null), 8000);
+      } else {
+        setSmsStatus({
+          type: "error",
+          message: res.error || "Failed to send SMS reminders."
+        });
+      }
+    } catch (err) {
+      setSmsStatus({
+        type: "error",
+        message: err.message
+      });
+    } finally {
+      setSendingSms(false);
+    }
+  };
+
+  const handleSendIndividualSMS = async (studentId) => {
+    setSendingIndividual(prev => ({ ...prev, [studentId]: true }));
+    try {
+      const res = await api.sendPendingSMS(studentId);
+      if (res.success) {
+        if (res.results && res.results.length > 0) {
+          setSentSmsLogs(prev => [...res.results, ...prev]);
+        }
+        // Find student name
+        const stud = data.students.find(s => s.id === studentId);
+        const name = stud ? stud.name : "Student";
+        setSmsStatus({
+          type: "success",
+          message: `SMS reminder sent successfully to ${name}!`
+        });
+        setTimeout(() => setSmsStatus(null), 8000);
+      } else {
+        setSmsStatus({
+          type: "error",
+          message: "Failed to send SMS: " + (res.error || "Unknown error")
+        });
+      }
+    } catch (err) {
+      setSmsStatus({
+        type: "error",
+        message: "Error: " + err.message
+      });
+    } finally {
+      setSendingIndividual(prev => ({ ...prev, [studentId]: false }));
+    }
+  };
 
   const load = async () => {
     const students = await api.getStudents();
@@ -118,6 +189,7 @@ export default function Reports() {
 
   const totalCollected = filteredPaidFees.reduce((a, b) => a + b.amount, 0);
   const totalPending = filteredPendingDues.reduce((a, b) => a + b.amount, 0);
+  const uniquePendingStudentsCount = new Set(filteredPendingDues.map(d => d.studentId)).size;
 
   const exportCSV = () => {
     const headers = ["Student", "Batch", "Month", "Year", "Amount", "Status"];
@@ -266,16 +338,58 @@ export default function Reports() {
           </div>
         </div>
 
-        {/* Clean Insights */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 sm:p-6">
-          <h2 className="font-bold mb-3">Insights</h2>
+        {/* SMS Dues Notifier Card */}
+        <div className="bg-gradient-to-br from-rose-500 to-rose-600 text-white rounded-2xl p-5 sm:p-6 shadow-md relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <Smartphone size={120} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-2 bg-white/20 w-fit px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+              <Sparkles size={12} className="text-yellow-300 animate-pulse" />
+              <span>SMS Dues Notifier</span>
+            </div>
+            <h2 className="text-xl font-black mb-1">Send Dues Reminders</h2>
+            <p className="text-xs text-rose-100 mb-4 leading-relaxed">
+              Instantly notify all students with pending amounts. Reminders will be sent as SMS messages (or simulated terminal console/email alerts).
+            </p>
+            
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="bg-white/10 rounded-xl p-3 border border-white/5 backdrop-blur-xs">
+                <span className="text-[10px] text-rose-200 block uppercase font-bold">Pending Students</span>
+                <span className="text-2xl font-black">{uniquePendingStudentsCount}</span>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3 border border-white/5 backdrop-blur-xs">
+                <span className="text-[10px] text-rose-200 block uppercase font-bold">Total Dues</span>
+                <span className="text-2xl font-black">₹{totalPending}</span>
+              </div>
+            </div>
 
-          <p className="text-sm text-slate-300 leading-relaxed">
-            • Fee collection tracking is active <br />
-            • Pending payments require follow-up <br />
-            • Batch-wise reporting helps better management <br />
-            • Use export for financial analysis
-          </p>
+            {smsStatus && (
+              <div className={`p-3 rounded-xl text-xs mb-4 flex items-start gap-2 backdrop-blur-xs transition-all ${
+                smsStatus.type === 'success' ? 'bg-emerald-500/25 text-emerald-100 border border-emerald-500/30' : 'bg-red-500/25 text-red-100 border border-red-500/30'
+              }`}>
+                <div className="font-semibold">{smsStatus.message}</div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleSendAllSMS}
+            disabled={sendingSms || uniquePendingStudentsCount === 0}
+            className="w-full bg-white text-rose-600 font-bold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 hover:bg-rose-50 disabled:opacity-50 disabled:hover:bg-white active:scale-[0.98] transition shadow-sm mt-auto text-sm"
+          >
+            {sendingSms ? (
+              <>
+                <span className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                Sending Reminders...
+              </>
+            ) : (
+              <>
+                <Send size={14} />
+                Send SMS Reminders to All
+              </>
+            )}
+          </button>
         </div>
 
       </div>
@@ -296,6 +410,7 @@ export default function Reports() {
                   <th className="pb-3 font-medium">Batch</th>
                   <th className="pb-3 font-medium">Month/Year</th>
                   <th className="pb-3 font-medium text-right">Amount</th>
+                  <th className="pb-3 font-medium text-center">Remind</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -316,12 +431,30 @@ export default function Reports() {
                         <td className="py-3 text-slate-500">{batch?.name || "N/A"}</td>
                         <td className="py-3 text-slate-500">{f.month} {f.year}</td>
                         <td className="py-3 text-right font-bold text-slate-900">₹{f.amount}</td>
+                        <td className="py-3 text-center">
+                          {student ? (
+                            <button
+                              onClick={() => handleSendIndividualSMS(student.id)}
+                              disabled={sendingIndividual[student.id]}
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition active:scale-95"
+                              title={`Send SMS reminder to ${student.name}`}
+                            >
+                              {sendingIndividual[student.id] ? (
+                                <span className="w-4 h-4 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Smartphone size={15} />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan="4" className="py-10 text-center text-slate-400 italic">
+                    <td colSpan="5" className="py-10 text-center text-slate-400 italic">
                       All fees are up to date! No pending payments.
                     </td>
                   </tr>
@@ -331,6 +464,42 @@ export default function Reports() {
           </div>
         </div>
       </div>
+
+      {/* Sent Messages History (Session) */}
+      {sentSmsLogs.length > 0 && (
+        <div className="mt-6 bg-slate-950 text-slate-100 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden transition-all duration-300">
+          <div className="flex items-center gap-2 mb-4">
+            <Smartphone className="text-rose-400 animate-bounce" size={20} />
+            <h2 className="font-bold text-lg">Sent Messages Log (This Session)</h2>
+          </div>
+          
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+            {sentSmsLogs.map((log, idx) => (
+              <div key={idx} className="bg-slate-900 border border-slate-800/80 rounded-xl p-3.5 hover:border-slate-700 transition flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <span className="font-bold text-slate-100 text-sm">{log.name}</span>
+                    <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full font-mono">{log.mobile}</span>
+                    <span className="text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full font-mono">₹{log.amount} Pending</span>
+                  </div>
+                  <p className="text-xs text-slate-300 bg-slate-950 p-2.5 rounded-lg border border-slate-800/50 leading-relaxed font-mono">
+                    "Dear {log.name}, this is a gentle reminder from EduFees. Your total pending balance is INR {log.amount}. Please clear your dues as soon as possible. Thank you!"
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-end md:self-center">
+                  <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md ${
+                    log.success 
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                  }`}>
+                    {log.success ? 'Sent (Simulated)' : 'Failed'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

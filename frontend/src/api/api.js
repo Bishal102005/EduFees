@@ -459,4 +459,24 @@ export const api = {
     localStorage.setItem('fees_records', JSON.stringify(list.filter((f) => f.id !== id)));
     return true;
   },
+
+  // SMS Notifications API
+  async sendPendingSMS(studentId = null) {
+    const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/sms/send-pending-manual`;
+    try {
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId })
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('[API] Failed to trigger pending SMS:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
 };
