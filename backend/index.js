@@ -568,8 +568,8 @@ app.post('/api/sms/send-pending-manual', async (req, res) => {
 });
 
 // 2. Cron scheduled endpoint (receives request from Vercel Cron at month end)
-app.post('/api/cron/send-monthly-pending', async (req, res) => {
-  const reqSecret = req.query.secret;
+app.all('/api/cron/send-monthly-pending', async (req, res) => {
+  const reqSecret = req.query.secret || req.body?.secret || req.headers['x-cron-secret'];
   const cronSecret = process.env.CRON_SECRET || 'super_secret_cron_token_123';
 
   // Security guard to prevent unauthorized trigger of SMS bulk runs

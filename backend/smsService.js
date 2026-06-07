@@ -67,9 +67,18 @@ async function sendEmailFallback(studentName, studentEmail, amount, messageText)
  */
 export async function sendSMS({ to, studentName, amount, email }) {
   const provider = (process.env.SMS_PROVIDER || 'simulated').toLowerCase();
-  
-  // Format the message
+  const cleanedNumber = String(to || '').replace(/[^0-9+]/g, '');
   const message = `Dear ${studentName}, this is a gentle reminder from EduFees. Your total pending balance is INR ${amount}. Please clear your dues as soon as possible. Thank you!`;
+
+  if (!cleanedNumber || cleanedNumber.length < 10) {
+    const errorMsg = `Invalid phone number for ${studentName}: ${to}`;
+    console.error(`[SMS Service] ${errorMsg}`);
+    if (email) sendEmailFallback(studentName, email, amount, message).catch(console.error);
+    return { success: false, provider, error: errorMsg };
+  }
+
+  const twilioNumber = cleanedNumber.startsWith('+') ? cleanedNumber : `+${cleanedNumber}`;
+  const fast2smsNumber = cleanedNumber.replace(/\D/g, '').slice(-10);
 
   console.log(`[SMS Service] Dispatching message to ${to} (${studentName}) via [${provider.toUpperCase()}]`);
 
@@ -81,6 +90,7 @@ export async function sendSMS({ to, studentName, amount, email }) {
     if (!accountSid || !authToken || !fromNumber) {
       const errorMsg = 'Twilio credentials missing in backend environment variables.';
       console.error(`[SMS Service] Twilio Error: ${errorMsg}`);
+      if (email) sendEmailFallback(studentName, email, amount, message).catch(console.error);
       return { success: false, provider, error: errorMsg };
     }
 
@@ -94,7 +104,7 @@ export async function sendSMS({ to, studentName, amount, email }) {
         },
         body: new URLSearchParams({
           From: fromNumber,
-          To: to.startsWith('+') ? to : `+${to}`, // Ensure it starts with international prefix if needed, or send as is
+          To: twilioNumber,
           Body: message
         })
       });
@@ -109,6 +119,7 @@ export async function sendSMS({ to, studentName, amount, email }) {
       return { success: true, provider, sid: data.sid };
     } catch (err) {
       console.error(`[SMS Service] Twilio sending failed: ${err.message}`);
+      if (email) sendEmailFallback(studentName, email, amount, message).catch(console.error);
       return { success: false, provider, error: err.message };
     }
   }
@@ -122,11 +133,15 @@ export async function sendSMS({ to, studentName, amount, email }) {
       return { success: false, provider, error: errorMsg };
     }
 
-    try {
-      // Clean phone number (Fast2SMS expects 10 digit Indian number)
-      const cleanPhone = to.replace(/[^0-9]/g, '').slice(-10);
+    if (fast2smsNumber.length !== 10) {
+      const errorMsg = `Invalid Fast2SMS mobile number for ${studentName}: ${to}`;
+      console.error(`[SMS Service] ${errorMsg}`);
+      if (email) sendEmailFallback(studentName, email, amount, message).catch(console.error);
+      return { success: false, provider, error: errorMsg };
+    }
 
-      const response = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(message)}&flash=0&numbers=${cleanPhone}`, {
+    try {
+      const response = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(message)}&flash=0&numbers=${fast2smsNumber}`, {
         method: 'GET'
       });
 
@@ -140,6 +155,7 @@ export async function sendSMS({ to, studentName, amount, email }) {
       return { success: true, provider, data };
     } catch (err) {
       console.error(`[SMS Service] Fast2SMS sending failed: ${err.message}`);
+      if (email) sendEmailFallback(studentName, email, amount, message).catch(console.error);
       return { success: false, provider, error: err.message };
     }
   }
