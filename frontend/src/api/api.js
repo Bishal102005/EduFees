@@ -117,7 +117,7 @@ export const api = {
   async login(role, credentials) {
     if (role === 'teacher') {
       const password = credentials.password;
-      const stored = 'admin';
+      const stored = 'admin@79';
       if (password === stored) {
         return { success: true, auth: { role: 'teacher', userId: 'teacher' } };
       }
