@@ -31,7 +31,7 @@ function monthsFromBatchStart(batch) {
 
 export default function StudentDashboard({ studentId, onLogout }) {
   const [student, setStudent] = useState(null);
-  const [batch, setBatch] = useState(null);
+  const [enrolledBatches, setEnrolledBatches] = useState([]);
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,8 +44,20 @@ export default function StudentDashboard({ studentId, onLogout }) {
 
       setStudent(found);
 
-      const batches = await api.getBatches();
-      setBatch(batches.find((b) => b.id === found.batchId));
+      const allBatches = await api.getBatches();
+      const sBatches = found.studentBatches && found.studentBatches.length > 0
+        ? found.studentBatches
+        : (found.batchId ? [{ batchId: found.batchId, finalFee: found.finalFee }] : []);
+
+      const mappedEnrolled = sBatches.map(sb => {
+        const bObj = allBatches.find(b => b.id === sb.batchId);
+        return {
+          ...bObj,
+          customFee: sb.finalFee !== undefined ? sb.finalFee : (bObj ? bObj.monthlyFee : 0)
+        };
+      }).filter(b => b.id);
+
+      setEnrolledBatches(mappedEnrolled);
 
       const allFees = await api.getFees();
       setFees(
@@ -89,15 +101,16 @@ export default function StudentDashboard({ studentId, onLogout }) {
     .filter((f) => f.status === "paid")
     .reduce((a, b) => a + b.amount, 0);
 
-  const expectedMonths = monthsFromBatchStart(batch);
-  const monthlyRate = student.finalFee || (batch ? Number(batch.monthlyFee) : 0);
-  const expectedFee = batch
-    ? expectedMonths * monthlyRate
-    : totalPaid;
+  let totalExpectedFee = 0;
+  enrolledBatches.forEach(batch => {
+    const months = monthsFromBatchStart(batch);
+    totalExpectedFee += (months * Number(batch.customFee || 0));
+  });
+  if (enrolledBatches.length === 0) totalExpectedFee = totalPaid;
 
-  const pending = Math.max(0, expectedFee - totalPaid);
+  const pending = Math.max(0, totalExpectedFee - totalPaid);
   const rate =
-    expectedFee > 0 ? Math.round((totalPaid / expectedFee) * 100) : 0;
+    totalExpectedFee > 0 ? Math.round((totalPaid / totalExpectedFee) * 100) : 0;
 
   const Card = ({ children }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur hover:bg-white/10 transition">
@@ -167,23 +180,22 @@ export default function StudentDashboard({ studentId, onLogout }) {
           <Card>
             <div className="flex items-center gap-2 mb-4">
               <BookOpen className="text-indigo-400" />
-              <h2 className="font-bold">My Batch</h2>
+              <h2 className="font-bold">My Batches ({enrolledBatches.length})</h2>
             </div>
 
-            {batch ? (
-              <div className="space-y-2 text-sm">
-                <p><span className="text-gray-400">Name:</span> {batch.name}</p>
-                <p><span className="text-gray-400">Subject:</span> {batch.subject}</p>
-                <p><span className="text-gray-400">Schedule:</span> {batch.schedule}</p>
-                <div className="mt-2">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider font-semibold">My Monthly Fee</p>
-                  <p className="text-indigo-400 font-bold text-lg">
-                    ₹{student.finalFee || batch.monthlyFee}
-                  </p>
-                </div>
+            {enrolledBatches.length > 0 ? (
+              <div className="space-y-4">
+                {enrolledBatches.map(batch => (
+                  <div key={batch.id} className="bg-white/5 p-3 rounded-xl border border-white/10 space-y-1 text-sm">
+                    <p className="font-semibold text-indigo-300">{batch.name}</p>
+                    <p className="text-xs text-gray-300">📚 Subject: {batch.subject}</p>
+                    <p className="text-xs text-gray-300">🕒 Schedule: {batch.schedule}</p>
+                    <p className="text-xs text-gray-400 font-medium mt-1">Monthly Fee: <span className="text-indigo-400 font-bold text-sm">₹{batch.customFee}</span></p>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-gray-400">No batch assigned</p>
+              <p className="text-gray-400 text-sm">No batches currently assigned</p>
             )}
           </Card>
 

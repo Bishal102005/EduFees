@@ -47,16 +47,37 @@ CREATE TABLE IF NOT EXISTS public.fees_records (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 4. Enable Row Level Security (Optional: Disable if you want open API access or configure RLS rules)
+-- 4. Create Student Batches (Junction Table for Multi-Batch Enrollments)
+CREATE TABLE IF NOT EXISTS public.student_batches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    batch_id UUID NOT NULL REFERENCES public.batches(id) ON DELETE CASCADE,
+    discount NUMERIC NOT NULL DEFAULT 0,
+    final_fee NUMERIC NOT NULL DEFAULT 0,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(student_id, batch_id)
+);
+
+-- Backfill existing single-batch assignments safely into student_batches
+INSERT INTO public.student_batches (student_id, batch_id, discount, final_fee)
+SELECT id, batch_id, discount, final_fee 
+FROM public.students 
+WHERE batch_id IS NOT NULL
+ON CONFLICT (student_id, batch_id) DO NOTHING;
+
+-- 5. Enable Row Level Security
 ALTER TABLE public.batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fees_records ENABLE ROW LEVEL SECURITY;
 
--- 5. Create Simple Allow-All Policies for Development (Configure real Auth policies in production)
+-- 6. Create Simple Allow-All Policies for Development
 DROP POLICY IF EXISTS "Allow anonymous read on batches" ON public.batches;
 DROP POLICY IF EXISTS "Allow anonymous write on batches" ON public.batches;
 DROP POLICY IF EXISTS "Allow anonymous read on students" ON public.students;
 DROP POLICY IF EXISTS "Allow anonymous write on students" ON public.students;
+DROP POLICY IF EXISTS "Allow anonymous read on student_batches" ON public.student_batches;
+DROP POLICY IF EXISTS "Allow anonymous write on student_batches" ON public.student_batches;
 DROP POLICY IF EXISTS "Allow anonymous read on fees_records" ON public.fees_records;
 DROP POLICY IF EXISTS "Allow anonymous write on fees_records" ON public.fees_records;
 
@@ -66,10 +87,16 @@ CREATE POLICY "Allow anonymous write on batches" ON public.batches FOR ALL USING
 CREATE POLICY "Allow anonymous read on students" ON public.students FOR SELECT USING (true);
 CREATE POLICY "Allow anonymous write on students" ON public.students FOR ALL USING (true);
 
+CREATE POLICY "Allow anonymous read on student_batches" ON public.student_batches FOR SELECT USING (true);
+CREATE POLICY "Allow anonymous write on student_batches" ON public.student_batches FOR ALL USING (true);
+
 CREATE POLICY "Allow anonymous read on fees_records" ON public.fees_records FOR SELECT USING (true);
 CREATE POLICY "Allow anonymous write on fees_records" ON public.fees_records FOR ALL USING (true);
 
 -- Indexes for performance Optimization
 CREATE INDEX IF NOT EXISTS idx_students_mobile ON public.students(mobile);
+CREATE INDEX IF NOT EXISTS idx_student_batches_student ON public.student_batches(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_batches_batch ON public.student_batches(batch_id);
 CREATE INDEX IF NOT EXISTS idx_fees_records_student ON public.fees_records(student_id);
 CREATE INDEX IF NOT EXISTS idx_fees_records_period ON public.fees_records(month, year);
+

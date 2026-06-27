@@ -277,35 +277,103 @@ app.delete('/api/batches/:id', async (req, res) => {
 // STUDENTS ENDPOINTS
 app.get('/api/students', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data: students, error: studentErr } = await supabase
       .from('students')
       .select('*')
       .order('join_date', { ascending: false });
 
-    if (error) throw error;
-    res.json(data);
+    if (studentErr) throw studentErr;
+
+    // Fetch all multi-batch enrollments
+    const { data: enrollments } = await supabase
+      .from('student_batches')
+      .select('*');
+
+    // Attach student_batches to each student
+    const result = students.map(student => {
+      const studentEnrolled = enrollments ? enrollments.filter(e => e.student_id === student.id) : [];
+      
+      // Fallback for legacy data if student_batches is empty for this student but student.batch_id exists
+      let finalBatches = studentEnrolled;
+      if (finalBatches.length === 0 && student.batch_id) {
+        finalBatches = [{
+          student_id: student.id,
+          batch_id: student.batch_id,
+          discount: student.discount || 0,
+          final_fee: student.final_fee || 0
+        }];
+      }
+
+      return {
+        ...student,
+        student_batches: finalBatches,
+        // Keep legacy batch_id fallback for components expecting primary batch
+        batch_id: student.batch_id || (finalBatches[0] ? finalBatches[0].batch_id : null)
+      };
+    });
+
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/students', async (req, res) => {
-  const { name, mobile, email, address, batchId, discount, finalFee } = req.body;
+  const { name, mobile, email, address, batchId, discount, finalFee, batches } = req.body;
   try {
-    const { data, error } = await supabase
+    // Determine primary batch for backwards compatibility columns
+    const batchList = Array.isArray(batches) && batches.length > 0 ? batches : [{ batchId, discount, finalFee }];
+    const primaryBatch = batchList[0] || {};
+
+    const { data: student, error } = await supabase
       .from('students')
-      .insert([{ name, mobile, email, address, batch_id: batchId, discount, final_fee: finalFee }])
+      .insert([{
+        name,
+        mobile,
+        email,
+        address,
+        batch_id: primaryBatch.batchId || primaryBatch.batch_id || batchId || null,
+        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (discount || 0),
+        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (finalFee || 0)
+      }])
       .select()
       .single();
 
     if (error) throw error;
 
-    // Send welcome email (asynchronously)
-    if (data && data.email) {
-      await sendWelcomeEmail(data.name, data.email);
+    // Save multi-batch enrollments into student_batches
+    const enrollmentsToInsert = batchList
+      .filter(b => (b.batchId || b.batch_id))
+      .map(b => ({
+        student_id: student.id,
+        batch_id: b.batchId || b.batch_id,
+        discount: Number(b.discount || 0),
+        final_fee: Number(b.finalFee !== undefined ? b.finalFee : (b.final_fee || 0))
+      }));
+
+    if (enrollmentsToInsert.length > 0) {
+      const { error: insertErr } = await supabase
+        .from('student_batches')
+        .insert(enrollmentsToInsert);
+      
+      if (insertErr) {
+        console.error('Warning: Error inserting student_batches enrollments:', insertErr.message);
+      }
     }
 
-    res.status(201).json(data);
+    // Fetch complete updated student structure
+    const { data: enrollments } = await supabase.from('student_batches').select('*').eq('student_id', student.id);
+    const responseData = {
+      ...student,
+      student_batches: enrollments || enrollmentsToInsert
+    };
+
+    // Send welcome email (asynchronously)
+    if (student && student.email) {
+      await sendWelcomeEmail(student.name, student.email);
+    }
+
+    res.status(201).json(responseData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -313,17 +381,51 @@ app.post('/api/students', async (req, res) => {
 
 app.put('/api/students/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, mobile, email, address, batchId, discount, finalFee } = req.body;
+  const { name, mobile, email, address, batchId, discount, finalFee, batches } = req.body;
   try {
-    const { data, error } = await supabase
+    const batchList = Array.isArray(batches) && batches.length > 0 ? batches : [{ batchId, discount, finalFee }];
+    const primaryBatch = batchList[0] || {};
+
+    const { data: student, error } = await supabase
       .from('students')
-      .update({ name, mobile, email, address, batch_id: batchId, discount, final_fee: finalFee })
+      .update({
+        name,
+        mobile,
+        email,
+        address,
+        batch_id: primaryBatch.batchId || primaryBatch.batch_id || batchId || null,
+        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (discount || 0),
+        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (finalFee || 0)
+      })
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    res.json(data);
+
+    // Sync multi-batch enrollments in student_batches
+    const enrollmentsToInsert = batchList
+      .filter(b => (b.batchId || b.batch_id))
+      .map(b => ({
+        student_id: id,
+        batch_id: b.batchId || b.batch_id,
+        discount: Number(b.discount || 0),
+        final_fee: Number(b.finalFee !== undefined ? b.finalFee : (b.final_fee || 0))
+      }));
+
+    // Delete existing and re-insert
+    await supabase.from('student_batches').delete().eq('student_id', id);
+
+    if (enrollmentsToInsert.length > 0) {
+      await supabase.from('student_batches').insert(enrollmentsToInsert);
+    }
+
+    const { data: enrollments } = await supabase.from('student_batches').select('*').eq('student_id', id);
+
+    res.json({
+      ...student,
+      student_batches: enrollments || enrollmentsToInsert
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -332,6 +434,9 @@ app.put('/api/students/:id', async (req, res) => {
 app.delete('/api/students/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    // Delete student_batches first if foreign key constraints require it
+    await supabase.from('student_batches').delete().eq('student_id', id);
+
     const { error } = await supabase
       .from('students')
       .delete()
@@ -441,6 +546,9 @@ async function calculatePendingBalances(specificStudentId = null) {
   const { data: batches, error: batchErr } = await supabase.from('batches').select('*');
   if (batchErr) throw batchErr;
 
+  // Fetch student_batches enrollments
+  const { data: enrollments } = await supabase.from('student_batches').select('*');
+
   // Fetch all fees records
   const { data: fees, error: feeErr } = await supabase.from('fees_records').select('*');
   if (feeErr) throw feeErr;
@@ -459,48 +567,62 @@ async function calculatePendingBalances(specificStudentId = null) {
       return;
     }
 
-    const batch = batches.find(b => b.id === student.batch_id);
-    if (!batch) return;
-
-    const targetAmount = Number(student.final_fee || batch.monthly_fee || 0);
-
-    // Start from batch start month or join date
-    let iterMonth = MONTHS.indexOf(batch.start_month);
-    let iterYear = Number(batch.start_year || currentYear);
-
-    if (iterMonth < 0 || !iterYear) {
-      const joinDate = new Date(student.join_date || student.created_at);
-      iterMonth = joinDate.getMonth();
-      iterYear = joinDate.getFullYear();
+    // Get enrollments for this student
+    let studentEnrollments = enrollments ? enrollments.filter(e => e.student_id === student.id) : [];
+    if (studentEnrollments.length === 0 && student.batch_id) {
+      studentEnrollments = [{
+        student_id: student.id,
+        batch_id: student.batch_id,
+        discount: student.discount || 0,
+        final_fee: student.final_fee || 0
+      }];
     }
+
+    if (studentEnrollments.length === 0) return;
 
     let totalPendingAmount = 0;
 
-    // Loop through each month/year from start to current
-    while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
-      const monthName = MONTHS[iterMonth];
+    studentEnrollments.forEach(enrollment => {
+      const batch = batches.find(b => b.id === enrollment.batch_id);
+      if (!batch) return;
 
-      const records = fees.filter(f => 
-        f.student_id === student.id &&
-        f.month === monthName &&
-        f.year === iterYear
-      );
+      const targetAmount = Number(enrollment.final_fee !== undefined && enrollment.final_fee !== null ? enrollment.final_fee : (batch.monthly_fee || 0));
 
-      const paidSum = records
-        .filter(f => f.status === 'paid')
-        .reduce((sum, f) => sum + Number(f.amount), 0);
+      let iterMonth = MONTHS.indexOf(batch.start_month);
+      let iterYear = Number(batch.start_year || currentYear);
 
-      const pendingBalance = targetAmount - paidSum;
-      if (pendingBalance > 0) {
-        totalPendingAmount += pendingBalance;
+      if (iterMonth < 0 || !iterYear) {
+        const joinDate = new Date(student.join_date || student.created_at);
+        iterMonth = joinDate.getMonth();
+        iterYear = joinDate.getFullYear();
       }
 
-      iterMonth++;
-      if (iterMonth > 11) {
-        iterMonth = 0;
-        iterYear++;
+      while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
+        const monthName = MONTHS[iterMonth];
+
+        const records = fees.filter(f => 
+          f.student_id === student.id &&
+          (f.batch_id ? f.batch_id === batch.id : true) &&
+          f.month === monthName &&
+          f.year === iterYear
+        );
+
+        const paidSum = records
+          .filter(f => f.status === 'paid')
+          .reduce((sum, f) => sum + Number(f.amount), 0);
+
+        const pendingBalance = targetAmount - paidSum;
+        if (pendingBalance > 0) {
+          totalPendingAmount += pendingBalance;
+        }
+
+        iterMonth++;
+        if (iterMonth > 11) {
+          iterMonth = 0;
+          iterYear++;
+        }
       }
-    }
+    });
 
     // Only add to pending if the balance is strictly greater than 0
     if (totalPendingAmount > 0) {

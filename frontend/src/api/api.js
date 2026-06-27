@@ -85,16 +85,24 @@ function mapBatch(b) {
 }
 
 function mapStudent(s) {
+  const rawBatches = s.student_batches || s.studentBatches || [];
+  const mappedBatches = rawBatches.map(b => ({
+    batchId: b.batch_id || b.batchId,
+    discount: Number(b.discount || 0),
+    finalFee: Number(b.final_fee !== undefined && b.final_fee !== null ? b.final_fee : (b.finalFee || 0))
+  }));
+
   return {
     id: s.id,
     name: s.name,
     mobile: s.mobile,
     email: s.email || '',
     address: s.address || '',
-    batchId: s.batch_id,
+    batchId: s.batch_id || s.batchId || (mappedBatches[0] ? mappedBatches[0].batchId : null),
     discount: Number(s.discount || 0),
     finalFee: Number(s.final_fee || 0),
-    joinDate: s.join_date,
+    studentBatches: mappedBatches,
+    joinDate: s.join_date || s.joinDate,
   };
 }
 
@@ -249,12 +257,28 @@ export const api = {
     const demoNames = ['Rahul Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Gupta', 'Vikram Singh', 'Test Student Pro', 'Test Student'];
     const isDemo = (s) => demoMobiles.includes(s.mobile) || demoNames.includes(s.name);
 
+    const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students`;
+    try {
+      const res = await fetch(backendUrl);
+      if (res.ok) {
+        const data = await res.json();
+        return data.map(mapStudent).filter(s => !isDemo(s));
+      }
+    } catch (e) {
+      console.warn('[API] Backend unreachable for getStudents, attempting direct Supabase query');
+    }
+
     let rawStudents = [];
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.from('students').select('*').order('join_date', { ascending: false });
-        if (!error && data) rawStudents = data.map(mapStudent);
-        if (error) console.warn('Supabase students error:', error.message);
+        const { data: students, error } = await supabase.from('students').select('*').order('join_date', { ascending: false });
+        const { data: enrollments } = await supabase.from('student_batches').select('*');
+        if (!error && students) {
+          rawStudents = students.map(s => mapStudent({
+            ...s,
+            student_batches: enrollments ? enrollments.filter(e => e.student_id === s.id) : []
+          }));
+        }
       } catch (e) {
         console.warn('Supabase students fetch failed, using localStorage');
       }
@@ -268,40 +292,36 @@ export const api = {
     const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students`;
     console.log(`[API] Attempting to add student via backend: ${backendUrl}`);
 
-    // Try backend first (triggers welcome email)
+    const payload = {
+      name: student.name,
+      mobile: student.mobile,
+      email: student.email,
+      address: student.address,
+      batchId: student.batchId,
+      discount: student.discount,
+      finalFee: student.finalFee,
+      batches: student.studentBatches || student.batches || []
+    };
+
     try {
       const res = await fetch(backendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: student.name,
-          mobile: student.mobile,
-          email: student.email,
-          address: student.address,
-          batchId: student.batchId,
-          discount: student.discount,
-          finalFee: student.finalFee,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
-        console.log('[API] Backend response OK, student added and email triggered.');
         const data = await res.json();
         return mapStudent(data);
-      } else {
-        console.warn(`[API] Backend returned status ${res.status}: ${res.statusText}`);
-        if (res.status === 404) {
-          console.error('[API] 404 error: The endpoint /api/students was not found on the backend server. Check if the backend is running correctly.');
-        }
       }
     } catch (e) {
-      console.warn('[API] Backend unreachable or request failed. Falling back to direct Supabase insert (no email will be sent). Error:', e.message);
+      console.warn('[API] Backend unreachable for addStudent. Falling back to direct Supabase insert.');
     }
 
-    // Fallback: direct Supabase insert (no email)
-    console.log('[API] Falling back to direct Supabase insert...');
+    // Fallback: direct Supabase insert
     if (isSupabaseConfigured) {
       try {
+        const primaryBatch = payload.batches[0] || {};
         const { data, error } = await supabase
           .from('students')
           .insert([{
@@ -309,23 +329,29 @@ export const api = {
             mobile: student.mobile,
             email: student.email,
             address: student.address,
-            batch_id: student.batchId,
-            discount: student.discount,
-            final_fee: student.finalFee
+            batch_id: primaryBatch.batchId || student.batchId,
+            discount: primaryBatch.discount !== undefined ? primaryBatch.discount : student.discount,
+            final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : student.finalFee
           }])
           .select()
           .single();
         if (!error && data) {
-          console.log('[API] Student added directly to Supabase.');
+          if (payload.batches.length > 0) {
+            const enrollmentsToInsert = payload.batches.map(b => ({
+              student_id: data.id,
+              batch_id: b.batchId,
+              discount: b.discount,
+              final_fee: b.finalFee
+            }));
+            await supabase.from('student_batches').insert(enrollmentsToInsert);
+          }
           return mapStudent(data);
         }
-        if (error) console.error('[API] Supabase insert error:', error.message);
       } catch (e) {
         console.error('[API] Supabase insert failed:', e.message);
       }
     }
 
-    // Final fallback to localStorage
     const list = JSON.parse(localStorage.getItem('fees_students') || '[]');
     list.push(student);
     localStorage.setItem('fees_students', JSON.stringify(list));
@@ -333,8 +359,36 @@ export const api = {
   },
 
   async updateStudent(id, student) {
+    const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students/${id}`;
+    const payload = {
+      name: student.name,
+      mobile: student.mobile,
+      email: student.email,
+      address: student.address,
+      batchId: student.batchId,
+      discount: student.discount,
+      finalFee: student.finalFee,
+      batches: student.studentBatches || student.batches || []
+    };
+
+    try {
+      const res = await fetch(backendUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return mapStudent(data);
+      }
+    } catch (e) {
+      console.warn('[API] Backend unreachable for updateStudent.');
+    }
+
     if (isSupabaseConfigured) {
       try {
+        const primaryBatch = payload.batches[0] || {};
         const { data, error } = await supabase
           .from('students')
           .update({
@@ -342,14 +396,26 @@ export const api = {
             mobile: student.mobile,
             email: student.email,
             address: student.address,
-            batch_id: student.batchId,
-            discount: student.discount,
-            final_fee: student.finalFee
+            batch_id: primaryBatch.batchId || student.batchId,
+            discount: primaryBatch.discount !== undefined ? primaryBatch.discount : student.discount,
+            final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : student.finalFee
           })
           .eq('id', id)
           .select()
           .single();
-        if (!error && data) return mapStudent(data);
+        if (!error && data) {
+          await supabase.from('student_batches').delete().eq('student_id', id);
+          if (payload.batches.length > 0) {
+            const enrollmentsToInsert = payload.batches.map(b => ({
+              student_id: id,
+              batch_id: b.batchId,
+              discount: b.discount,
+              final_fee: b.finalFee
+            }));
+            await supabase.from('student_batches').insert(enrollmentsToInsert);
+          }
+          return mapStudent(data);
+        }
       } catch (e) {
         console.error(e);
       }
@@ -361,8 +427,14 @@ export const api = {
   },
 
   async deleteStudent(id) {
+    const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students/${id}`;
+    try {
+      await fetch(backendUrl, { method: 'DELETE' });
+    } catch (e) {}
+
     if (isSupabaseConfigured) {
       try {
+        await supabase.from('student_batches').delete().eq('student_id', id);
         await supabase.from('students').delete().eq('id', id);
         return true;
       } catch (e) {

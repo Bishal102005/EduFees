@@ -9,9 +9,7 @@ const emptyForm = {
   mobile: "",
   email: "",
   address: "",
-  batchId: "",
-  discount: 0,
-  finalFee: 0,
+  studentBatches: [], // Array of { batchId, discount, finalFee }
 };
 
 export default function Students() {
@@ -57,11 +55,10 @@ export default function Students() {
 
   const openAddForm = (batchId = "") => {
     const batch = batches.find(b => b.id === batchId);
-    const fee = batch ? batch.monthlyFee : 0;
+    const initialBatches = batchId ? [{ batchId, discount: 0, finalFee: batch ? batch.monthlyFee : 0 }] : [];
     setForm({
       ...emptyForm,
-      batchId: batchId,
-      finalFee: fee,
+      studentBatches: initialBatches,
     });
     setEditingId(null);
     setShowForm(true);
@@ -69,14 +66,16 @@ export default function Students() {
 
   const edit = (s) => {
     setEditingId(s.id);
+    const sBatches = s.studentBatches && s.studentBatches.length > 0 
+      ? s.studentBatches 
+      : (s.batchId ? [{ batchId: s.batchId, discount: s.discount || 0, finalFee: s.finalFee || 0 }] : []);
+    
     setForm({
       name: s.name,
       mobile: s.mobile,
       email: s.email,
       address: s.address,
-      batchId: s.batchId,
-      discount: s.discount || 0,
-      finalFee: s.finalFee || 0,
+      studentBatches: sBatches,
     });
     setShowForm(true);
   };
@@ -100,6 +99,34 @@ export default function Students() {
     }));
   };
 
+  // Helper for toggle batch selection in form
+  const handleToggleBatchInForm = (bId) => {
+    const batchObj = batches.find(b => b.id === bId);
+    const exists = form.studentBatches.find(sb => sb.batchId === bId);
+    let updated;
+    if (exists) {
+      updated = form.studentBatches.filter(sb => sb.batchId !== bId);
+    } else {
+      updated = [...form.studentBatches, { batchId: bId, discount: 0, finalFee: batchObj ? batchObj.monthlyFee : 0 }];
+    }
+    setForm({ ...form, studentBatches: updated });
+  };
+
+  const handleUpdateBatchFeeInForm = (bId, field, value) => {
+    const num = Number(value);
+    const batchObj = batches.find(b => b.id === bId);
+    const baseFee = batchObj ? batchObj.monthlyFee : 0;
+
+    const updated = form.studentBatches.map(sb => {
+      if (sb.batchId !== bId) return sb;
+      if (field === 'discount') {
+        return { ...sb, discount: num, finalFee: Math.max(0, baseFee - num) };
+      }
+      return { ...sb, [field]: num };
+    });
+    setForm({ ...form, studentBatches: updated });
+  };
+
   // Filter students based on search query
   const filteredStudents = students.filter(s => {
     const nameMatch = s.name?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -108,71 +135,100 @@ export default function Students() {
     return nameMatch || mobileMatch || emailMatch;
   });
 
-  // Group students by batchId
+  // Group students by batchId (supporting multiple batches per student)
   const groupedStudents = batches.reduce((acc, b) => {
-    acc[b.id] = filteredStudents.filter(s => s.batchId === b.id);
+    acc[b.id] = filteredStudents.filter(s => 
+      s.studentBatches && s.studentBatches.length > 0 
+        ? s.studentBatches.some(sb => sb.batchId === b.id) 
+        : s.batchId === b.id
+    );
     return acc;
   }, {});
 
-  const unassignedStudents = filteredStudents.filter(s => 
-    !s.batchId || !batches.some(b => b.id === s.batchId)
-  );
+  const unassignedStudents = filteredStudents.filter(s => {
+    const hasBatches = s.studentBatches && s.studentBatches.length > 0;
+    if (hasBatches) return false;
+    return !s.batchId || !batches.some(b => b.id === s.batchId);
+  });
 
-  const renderStudentCard = (s) => (
-    <div
-      key={s.id}
-      className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between"
-    >
-      {/* TOP */}
-      <div>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm sm:text-base shrink-0">
-              {s.name?.charAt(0)}
+  const renderStudentCard = (s) => {
+    const enrolledList = s.studentBatches && s.studentBatches.length > 0 
+      ? s.studentBatches 
+      : (s.batchId ? [{ batchId: s.batchId, discount: s.discount || 0, finalFee: s.finalFee || 0 }] : []);
+
+    return (
+      <div
+        key={s.id}
+        className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between"
+      >
+        {/* TOP */}
+        <div>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm sm:text-base shrink-0">
+                {s.name?.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-slate-900 text-sm sm:text-base truncate">
+                  {s.name}
+                </p>
+                <p className="text-xs text-slate-500">{s.mobile}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-slate-900 text-sm sm:text-base truncate">
-                {s.name}
-              </p>
-              <p className="text-xs text-slate-500">{s.mobile}</p>
+            <User size={16} className="text-slate-400 shrink-0" />
+          </div>
+
+          {/* INFO */}
+          <div className="mt-4 text-xs sm:text-sm text-slate-500 space-y-2">
+            <p className="truncate">Email: {s.email || "N/A"}</p>
+            <div>
+              <span className="font-semibold text-slate-700 block mb-1">Enrolled Batches ({enrolledList.length}):</span>
+              {enrolledList.length === 0 ? (
+                <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md text-xs">Unassigned</span>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {enrolledList.map(item => {
+                    const bObj = batches.find(b => b.id === item.batchId);
+                    return (
+                      <span key={item.batchId} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg text-xs font-medium border border-indigo-100">
+                        <span>{bObj ? bObj.name : "Batch"}</span>
+                        <span className="font-bold text-indigo-900">₹{item.finalFee}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-          <User size={16} className="text-slate-400 shrink-0" />
         </div>
 
-        {/* INFO */}
-        <div className="mt-4 text-xs sm:text-sm text-slate-500 space-y-1">
-          <p className="truncate">Email: {s.email || "N/A"}</p>
-          <p className="truncate">
-            Batch: {batches.find(b => b.id === s.batchId)?.name || "Not assigned"}
-          </p>
+        {/* FOOTER & ACTIONS */}
+        <div className="mt-4">
+          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-xs sm:text-sm">
+            <span className="text-slate-500">Total Monthly Fee:</span>
+            <span className="font-bold text-indigo-600">
+              ₹{enrolledList.reduce((sum, item) => sum + Number(item.finalFee || 0), 0)}
+            </span>
+          </div>
+
+          <div className="flex justify-end gap-3 mt-3">
+            <button
+              onClick={() => edit(s)}
+              className="text-indigo-600 hover:text-indigo-800 p-1.5 rounded-lg hover:bg-indigo-50 transition"
+            >
+              <Edit3 size={16} />
+            </button>
+            <button
+              onClick={() => del(s.id)}
+              className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* FOOTER & ACTIONS */}
-      <div className="mt-4">
-        <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-xs sm:text-sm">
-          <span className="text-slate-500">Custom Fee:</span>
-          <span className="font-bold text-indigo-600">₹{s.finalFee}</span>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-3">
-          <button
-            onClick={() => edit(s)}
-            className="text-indigo-600 hover:text-indigo-800 p-1.5 rounded-lg hover:bg-indigo-50 transition"
-          >
-            <Edit3 size={16} />
-          </button>
-          <button
-            onClick={() => del(s.id)}
-            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <Layout title="Students" subtitle="Manage all enrolled students">
@@ -218,96 +274,112 @@ export default function Students() {
 
       {/* FORM (responsive modal/card) */}
       {showForm && (
-        <div className="bg-white border rounded-2xl p-4 sm:p-6 mb-6 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white border rounded-2xl p-4 sm:p-6 mb-6 shadow-sm flex flex-col gap-4">
+          <h3 className="font-bold text-slate-900 text-base border-b pb-2">
+            {editingId ? "Edit Student Details & Batches" : "Add New Student"}
+          </h3>
 
-          <input
-            placeholder="Full Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="border rounded-xl p-3 w-full"
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input
+              placeholder="Full Name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="border rounded-xl p-3 w-full"
+            />
 
-          <input
-            placeholder="Mobile"
-            value={form.mobile}
-            onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-            className="border rounded-xl p-3 w-full"
-          />
+            <input
+              placeholder="Mobile"
+              value={form.mobile}
+              onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+              className="border rounded-xl p-3 w-full"
+            />
 
-          <input
-            placeholder="Email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="border rounded-xl p-3 w-full sm:col-span-2"
-          />
+            <input
+              placeholder="Email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="border rounded-xl p-3 w-full sm:col-span-2"
+            />
 
-          <select
-            value={form.batchId}
-            onChange={(e) => {
-              const bId = e.target.value;
-              const batch = batches.find(b => b.id === bId);
-              const fee = batch ? batch.monthlyFee : 0;
-              setForm({ 
-                ...form, 
-                batchId: bId,
-                finalFee: Math.max(0, fee - form.discount)
-              });
-            }}
-            className="border rounded-xl p-3 w-full"
-          >
-            <option value="">Select Batch</option>
-            {batches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} (₹{b.monthlyFee})
-              </option>
-            ))}
-          </select>
-
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="text-xs text-slate-500 ml-1">Deduct (₹)</label>
-              <input
-                type="number"
-                placeholder="Deduct"
-                value={form.discount}
-                onChange={(e) => {
-                  const disc = Number(e.target.value);
-                  const batch = batches.find(b => b.id === form.batchId);
-                  const fee = batch ? batch.monthlyFee : 0;
-                  setForm({ 
-                    ...form, 
-                    discount: disc,
-                    finalFee: Math.max(0, fee - disc)
-                  });
-                }}
-                className="border rounded-xl p-3 w-full"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-slate-500 ml-1">Final Fee (₹)</label>
-              <input
-                type="number"
-                value={form.finalFee}
-                readOnly
-                className="border rounded-xl p-3 w-full bg-slate-50 font-bold text-indigo-600"
-              />
-            </div>
+            <input
+              placeholder="Address"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              className="border rounded-xl p-3 w-full sm:col-span-2"
+            />
           </div>
 
-          <input
-            placeholder="Address"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            className="border rounded-xl p-3 w-full sm:col-span-2"
-          />
+          {/* MULTI-BATCH SELECTION SECTION */}
+          <div className="border rounded-xl p-4 bg-slate-50/50 space-y-3">
+            <label className="font-semibold text-slate-800 text-sm block">
+              Enroll in Batches (Select one or multiple):
+            </label>
+
+            {batches.length === 0 ? (
+              <p className="text-xs text-slate-500">No batches created yet. Please create a batch first.</p>
+            ) : (
+              <div className="space-y-2">
+                {batches.map(b => {
+                  const enrolledItem = form.studentBatches.find(sb => sb.batchId === b.id);
+                  const isSelected = !!enrolledItem;
+
+                  return (
+                    <div key={b.id} className={`p-3 rounded-xl border transition ${isSelected ? 'bg-indigo-50/60 border-indigo-200' : 'bg-white border-slate-200'}`}>
+                      <div className="flex items-center justify-between cursor-pointer" onClick={() => handleToggleBatchInForm(b.id)}>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-semibold text-slate-900 text-sm">{b.name}</p>
+                            <p className="text-xs text-slate-500">{b.subject} • Base Fee: ₹{b.monthlyFee}/mo</p>
+                          </div>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          {isSelected ? 'Selected' : '+ Select'}
+                        </span>
+                      </div>
+
+                      {isSelected && (
+                        <div className="mt-3 pt-3 border-t border-indigo-100 flex gap-3 items-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex-1">
+                            <label className="text-xs text-slate-500 block mb-1">Deduct Discount (₹)</label>
+                            <input
+                              type="number"
+                              value={enrolledItem.discount}
+                              onChange={(e) => handleUpdateBatchFeeInForm(b.id, 'discount', e.target.value)}
+                              className="border rounded-lg p-2 text-sm w-full bg-white"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-slate-500 block mb-1">Final Monthly Fee (₹)</label>
+                            <input
+                              type="number"
+                              value={enrolledItem.finalFee}
+                              readOnly
+                              className="border rounded-lg p-2 text-sm w-full bg-indigo-100/50 font-bold text-indigo-700"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* ACTIONS */}
-          <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               onClick={submit}
-              className="w-full sm:w-auto bg-green-600 text-white px-5 py-2 rounded-xl hover:bg-green-700 transition"
+              className="w-full sm:w-auto bg-indigo-600 text-white px-6 py-2.5 rounded-xl hover:bg-indigo-700 transition font-semibold text-sm shadow-sm"
             >
-              Save
+              Save Student
             </button>
             <button
               onClick={() => {
@@ -315,7 +387,7 @@ export default function Students() {
                 setForm(emptyForm);
                 setEditingId(null);
               }}
-              className="w-full sm:w-auto px-5 py-2 border rounded-xl hover:bg-slate-50 transition"
+              className="w-full sm:w-auto px-5 py-2.5 border rounded-xl hover:bg-slate-50 transition text-sm font-semibold text-slate-600"
             >
               Cancel
             </button>

@@ -16,6 +16,7 @@ export default function Fees() {
 
   const [form, setForm] = useState({
     studentId: "",
+    batchId: "",
     month: MONTHS[new Date().getMonth()],
     year: new Date().getFullYear(),
     amount: "",
@@ -39,12 +40,9 @@ export default function Fees() {
   const submit = async (e) => {
     e.preventDefault();
 
-    const student = students.find(s => s.id === form.studentId);
-
     const record = {
       ...form,
       id: Date.now().toString(),
-      batchId: student?.batchId,
       year: Number(form.year),
       amount: Number(form.amount),
       paidDate: form.status === "paid" ? new Date().toISOString() : null,
@@ -55,6 +53,7 @@ export default function Fees() {
     setShowForm(false);
     setForm({
       studentId: "",
+      batchId: "",
       month: MONTHS[new Date().getMonth()],
       year: new Date().getFullYear(),
       amount: "",
@@ -74,6 +73,13 @@ export default function Fees() {
     await api.updateFee(fee.id, updated);
     load();
   };
+
+  const selectedStudentObj = students.find(s => s.id === form.studentId);
+  const studentBatchesList = selectedStudentObj
+    ? (selectedStudentObj.studentBatches && selectedStudentObj.studentBatches.length > 0
+        ? selectedStudentObj.studentBatches
+        : (selectedStudentObj.batchId ? [{ batchId: selectedStudentObj.batchId, finalFee: selectedStudentObj.finalFee }] : []))
+    : [];
 
   return (
     <Layout title="Fees" subtitle="Track payments & collections">
@@ -101,21 +107,50 @@ export default function Fees() {
             onChange={(e) => {
               const sId = e.target.value;
               const student = students.find(s => s.id === sId);
+              const sBatches = student
+                ? (student.studentBatches && student.studentBatches.length > 0
+                    ? student.studentBatches
+                    : (student.batchId ? [{ batchId: student.batchId, finalFee: student.finalFee }] : []))
+                : [];
+              const firstBatch = sBatches[0] || {};
+              const defaultAmount = firstBatch.finalFee !== undefined ? firstBatch.finalFee : (student ? student.finalFee : "");
+
               setForm({ 
                 ...form, 
                 studentId: sId,
-                amount: student ? student.finalFee : ""
+                batchId: firstBatch.batchId || "",
+                amount: defaultAmount
               });
             }}
             className="border rounded-xl p-3"
             required
           >
             <option value="">Select Student</option>
-            {students.map(s => {
-              const batch = batches.find(b => b.id === s.batchId);
+            {students.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.mobile})
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={form.batchId}
+            onChange={(e) => {
+              const bId = e.target.value;
+              const matchedEnrollment = studentBatchesList.find(b => b.batchId === bId);
+              const bObj = batches.find(b => b.id === bId);
+              const autoFee = matchedEnrollment ? matchedEnrollment.finalFee : (bObj ? bObj.monthlyFee : form.amount);
+              setForm({ ...form, batchId: bId, amount: autoFee });
+            }}
+            className="border rounded-xl p-3"
+            disabled={!form.studentId}
+          >
+            <option value="">Select Batch (Optional)</option>
+            {studentBatchesList.map(item => {
+              const bObj = batches.find(b => b.id === item.batchId);
               return (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({batch?.name || "No batch"})
+                <option key={item.batchId} value={item.batchId}>
+                  {bObj ? bObj.name : "Batch"} (Fee: ₹{item.finalFee})
                 </option>
               );
             })}
@@ -173,15 +208,15 @@ export default function Fees() {
 
             <button
               onClick={submit}
-              className="w-full sm:w-auto bg-green-600 text-white px-5 py-2 rounded-xl hover:bg-green-700"
+              className="w-full sm:w-auto bg-green-600 text-white px-5 py-2 rounded-xl hover:bg-green-700 font-semibold"
             >
-              Save
+              Save Record
             </button>
 
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="w-full sm:w-auto border px-5 py-2 rounded-xl"
+              className="w-full sm:w-auto border px-5 py-2 rounded-xl text-slate-600"
             >
               Cancel
             </button>
@@ -196,59 +231,72 @@ export default function Fees() {
 
         {fees.map(f => {
           const student = students.find(s => s.id === f.studentId);
+          const batch = batches.find(b => b.id === f.batchId);
 
           return (
             <div
               key={f.id}
-              className="bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition"
+              className="bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
             >
 
               {/* TOP */}
-              <div className="flex justify-between items-start">
+              <div>
+                <div className="flex justify-between items-start">
 
-                <div>
-                  <p className="font-bold text-slate-900">
-                    {student?.name || "Unknown"}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {f.month} {f.year}
-                  </p>
+                  <div>
+                    <p className="font-bold text-slate-900">
+                      {student?.name || "Unknown"}
+                    </p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      {f.month} {f.year}
+                    </p>
+                  </div>
+
+                  {f.status === "paid" ? (
+                    <Check className="text-green-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="text-amber-500 shrink-0" />
+                  )}
+
                 </div>
 
-                {f.status === "paid" ? (
-                  <Check className="text-green-600" />
-                ) : (
-                  <AlertCircle className="text-amber-500" />
+                {batch && (
+                  <div className="mt-2">
+                    <span className="inline-block bg-indigo-50 text-indigo-700 text-xs px-2.5 py-0.5 rounded-md font-medium">
+                      📚 {batch.name}
+                    </span>
+                  </div>
                 )}
-
               </div>
 
               {/* AMOUNT */}
-              <div className="mt-4 flex items-center gap-2">
-                <IndianRupee className="text-slate-400" size={18} />
-                <p className="text-xl font-bold">₹{f.amount}</p>
-              </div>
+              <div className="mt-4">
+                <div className="flex items-center gap-1">
+                  <IndianRupee className="text-slate-400" size={18} />
+                  <p className="text-xl font-bold text-slate-900">₹{f.amount}</p>
+                </div>
 
-              {/* FOOTER */}
-              <div className="mt-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                {/* FOOTER */}
+                <div className="mt-3 pt-3 border-t flex justify-between items-center">
 
-                <span
-                  className={`text-xs px-3 py-1 rounded-full font-medium w-fit ${
-                    f.status === "paid"
-                      ? "bg-green-50 text-green-600"
-                      : "bg-amber-50 text-amber-600"
-                  }`}
-                >
-                  {f.status.toUpperCase()}
-                </span>
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                      f.status === "paid"
+                        ? "bg-green-50 text-green-600"
+                        : "bg-amber-50 text-amber-600"
+                    }`}
+                  >
+                    {f.status.toUpperCase()}
+                  </span>
 
-                <button
-                  onClick={() => toggleStatus(f)}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 w-fit"
-                >
-                  Toggle Status
-                </button>
+                  <button
+                    onClick={() => toggleStatus(f)}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                  >
+                    Toggle Status
+                  </button>
 
+                </div>
               </div>
 
             </div>
