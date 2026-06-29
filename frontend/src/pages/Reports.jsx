@@ -121,6 +121,10 @@ export default function Reports() {
   // ── DUES CALCULATION LOGIC ──────────────────────────────────────────────────
   
   const getAllPendingDues = () => {
+    const CAL_MONTHS = [
+      "January","February","March","April","May","June",
+      "July","August","September","October","November","December"
+    ];
     const allDues = [];
     const now = new Date();
     const currentMonthIdx = now.getMonth();
@@ -137,30 +141,33 @@ export default function Reports() {
 
         const targetAmount = sb.finalFee !== undefined && sb.finalFee !== null ? sb.finalFee : batch.monthlyFee;
 
-        // Start from Batch start month/year
-        let iterMonth = MONTHS.indexOf(batch.startMonth) - 1; 
-        let iterYear = batch.startYear;
+        let iterMonth = CAL_MONTHS.indexOf(batch.startMonth); 
+        let iterYear = Number(batch.startYear);
 
         if (iterMonth < 0 || !iterYear) {
           const joinDate = new Date(student.joinDate);
-          iterMonth = joinDate.getMonth();
-          iterYear = joinDate.getFullYear();
+          if (!isNaN(joinDate.getTime())) {
+            iterMonth = joinDate.getMonth();
+            iterYear = joinDate.getFullYear();
+          } else {
+            iterMonth = 0;
+            iterYear = currentYear;
+          }
         }
 
         while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
-          const monthName = MONTHS[iterMonth + 1];
+          const monthName = CAL_MONTHS[iterMonth];
           
-          // Find ALL records for this student/batch/month/year
           const records = data.fees.filter(f => 
             f.studentId === student.id && 
             (f.batchId === batch.id || (!f.batchId && sBatches.length === 1)) &&
             f.month === monthName && 
-            f.year === iterYear
+            Number(f.year) === iterYear
           );
 
           const paidSum = records
             .filter(f => f.status === "paid")
-            .reduce((sum, f) => sum + f.amount, 0);
+            .reduce((sum, f) => sum + Number(f.amount), 0);
 
           const pendingBalance = targetAmount - paidSum;
 
