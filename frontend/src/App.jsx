@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GraduationCap, Shield, Smartphone, ArrowRight, ChevronLeft, LogOut, Lock, BookOpen, TrendingUp, Users } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -17,18 +17,55 @@ const fadeUp = {
   transition: { duration: 0.25 },
 };
 
-const STATS = [
-  { icon: Users,      label: 'Students Enrolled', value: '1,240' },
-  { icon: TrendingUp, label: 'Fees Collected',     value: '₹8.4L' },
-  { icon: BookOpen,   label: 'Active Batches',     value: '18'    },
-];
-
 function LoginScreen({ onAuth }) {
   const [mode, setMode]         = useState('select');
   const [password, setPassword] = useState('');
   const [mobile, setMobile]     = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [stats, setStats] = useState([
+    { icon: Users,      label: 'Students Enrolled', value: '...' },
+    { icon: TrendingUp, label: 'Fees Collected',     value: '...' },
+    { icon: BookOpen,   label: 'Active Batches',     value: '...' },
+  ]);
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const [students, batches, fees] = await Promise.all([
+          api.getStudents(),
+          api.getBatches(),
+          api.getFees(),
+        ]);
+
+        const activeStudentsCount = students.filter(s => {
+          const hasBatches = s.studentBatches && s.studentBatches.length > 0;
+          if (hasBatches) return true;
+          return s.batchId && batches.some(b => b.id === s.batchId);
+        }).length;
+
+        const totalCollected = fees
+          .filter(f => f.status === 'paid')
+          .reduce((sum, f) => sum + Number(f.amount), 0);
+
+        let formattedCollected = '';
+        if (totalCollected >= 100000) {
+          formattedCollected = `₹${(totalCollected / 100000).toFixed(1)}L`;
+        } else {
+          formattedCollected = `₹${totalCollected.toLocaleString('en-IN')}`;
+        }
+
+        setStats([
+          { icon: Users,      label: 'Students Enrolled', value: activeStudentsCount.toLocaleString('en-IN') },
+          { icon: TrendingUp, label: 'Fees Collected',     value: formattedCollected },
+          { icon: BookOpen,   label: 'Active Batches',     value: batches.length.toLocaleString('en-IN') },
+        ]);
+      } catch (e) {
+        console.error('Failed to load login screen stats', e);
+      }
+    }
+    loadStats();
+  }, []);
 
   const handleLogin = async (role) => {
     setLoading(true); setError('');
@@ -117,7 +154,7 @@ function LoginScreen({ onAuth }) {
             borderRadius: '100px', padding: '4px 14px', marginBottom: '1.5rem',
           }}>
             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1' }} />
-            <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 600, letterSpacing: '0.06em' }}>TRUSTED BY 200+ INSTITUTES</span>
+            <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 600, letterSpacing: '0.06em' }}>TRUSTED BY AMITAVA DAS</span>
           </div>
 
           <h1 style={{
@@ -138,7 +175,7 @@ function LoginScreen({ onAuth }) {
 
           {/* Stats row */}
           <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2.5rem', flexWrap: 'wrap' }}>
-            {STATS.map(({ icon: Icon, label, value }) => (
+            {stats.map(({ icon: Icon, label, value }) => (
               <div key={label} style={{
                 display: 'flex', flexDirection: 'column', gap: '4px',
                 padding: '1rem 1.25rem',
