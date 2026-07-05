@@ -326,9 +326,7 @@ function LoginScreen({ onAuth }) {
                   </button>
                 </div>
 
-                <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#1e2d3d', marginTop: '2rem' }}>
-                  Protected by 256-bit encryption
-                </p>
+
               </motion.div>
             )}
 
