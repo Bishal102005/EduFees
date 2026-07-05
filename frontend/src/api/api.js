@@ -292,15 +292,18 @@ export const api = {
     const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students`;
     console.log(`[API] Attempting to add student via backend: ${backendUrl}`);
 
+    const hasBatchesField = ('studentBatches' in student) || ('batches' in student);
+    const batches = student.studentBatches || student.batches || [];
+    const primaryBatch = batches[0] || {};
     const payload = {
       name: student.name,
       mobile: student.mobile,
       email: student.email,
       address: student.address,
-      batchId: student.batchId,
-      discount: student.discount,
-      finalFee: student.finalFee,
-      batches: student.studentBatches || student.batches || []
+      batchId: primaryBatch.batchId || (hasBatchesField ? null : student.batchId) || null,
+      discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (hasBatchesField ? 0 : (student.discount || 0)),
+      finalFee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (hasBatchesField ? 0 : (student.finalFee || 0)),
+      batches: batches
     };
 
     try {
@@ -321,17 +324,16 @@ export const api = {
     // Fallback: direct Supabase insert
     if (isSupabaseConfigured) {
       try {
-        const primaryBatch = payload.batches[0] || {};
         const { data, error } = await supabase
           .from('students')
           .insert([{
-            name: student.name,
-            mobile: student.mobile,
-            email: student.email,
-            address: student.address,
-            batch_id: primaryBatch.batchId || student.batchId,
-            discount: primaryBatch.discount !== undefined ? primaryBatch.discount : student.discount,
-            final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : student.finalFee
+            name: payload.name,
+            mobile: payload.mobile,
+            email: payload.email,
+            address: payload.address,
+            batch_id: payload.batchId,
+            discount: payload.discount,
+            final_fee: payload.finalFee
           }])
           .select()
           .single();
@@ -360,15 +362,18 @@ export const api = {
 
   async updateStudent(id, student) {
     const backendUrl = `${import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000'}/api/students/${id}`;
+    const hasBatchesField = ('studentBatches' in student) || ('batches' in student);
+    const batches = student.studentBatches || student.batches || [];
+    const primaryBatch = batches[0] || {};
     const payload = {
       name: student.name,
       mobile: student.mobile,
       email: student.email,
       address: student.address,
-      batchId: student.batchId,
-      discount: student.discount,
-      finalFee: student.finalFee,
-      batches: student.studentBatches || student.batches || []
+      batchId: primaryBatch.batchId || (hasBatchesField ? null : student.batchId) || null,
+      discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (hasBatchesField ? 0 : (student.discount || 0)),
+      finalFee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (hasBatchesField ? 0 : (student.finalFee || 0)),
+      batches: batches
     };
 
     try {
@@ -388,17 +393,16 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        const primaryBatch = payload.batches[0] || {};
         const { data, error } = await supabase
           .from('students')
           .update({
-            name: student.name,
-            mobile: student.mobile,
-            email: student.email,
-            address: student.address,
-            batch_id: primaryBatch.batchId || student.batchId,
-            discount: primaryBatch.discount !== undefined ? primaryBatch.discount : student.discount,
-            final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : student.finalFee
+            name: payload.name,
+            mobile: payload.mobile,
+            email: payload.email,
+            address: payload.address,
+            batch_id: payload.batchId,
+            discount: payload.discount,
+            final_fee: payload.finalFee
           })
           .eq('id', id)
           .select()

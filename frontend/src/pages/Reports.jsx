@@ -103,7 +103,15 @@ export default function Reports() {
     const students = await api.getStudents();
     const batches = await api.getBatches();
     const fees = await api.getFees();
-    setData({ students, batches, fees });
+
+    // Only show active (enrolled) students in reports
+    const activeStudents = students.filter(s => {
+      const hasBatches = s.studentBatches && s.studentBatches.length > 0;
+      if (hasBatches) return true;
+      return s.batchId && batches.some(b => b.id === s.batchId);
+    });
+
+    setData({ students: activeStudents, batches, fees });
   };
 
   useEffect(() => {

@@ -18,7 +18,7 @@ export default function Students() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, studentId: null, studentName: "" });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, studentId: null, studentName: "", batchId: null, batchName: "", isLastBatch: false });
   
   // New UI states
   const [selectedBatchId, setSelectedBatchId] = useState("all");
@@ -80,14 +80,43 @@ export default function Students() {
     setShowForm(true);
   };
 
-  const del = async (id) => {
+  const del = async (id, batchId) => {
     const student = students.find(s => s.id === id);
-    setDeleteModal({ isOpen: true, studentId: id, studentName: student?.name || "this student" });
+    const batch = batches.find(b => b.id === batchId);
+    const enrolledCount = (student?.studentBatches || []).length || (student?.batchId ? 1 : 0);
+    setDeleteModal({
+      isOpen: true,
+      studentId: id,
+      studentName: student?.name || "this student",
+      batchId: batchId,
+      batchName: batch?.name || "",
+      isLastBatch: enrolledCount <= 1
+    });
   };
 
   const handleConfirmDelete = async () => {
     if (deleteModal.studentId) {
-      await api.deleteStudent(deleteModal.studentId);
+      if (deleteModal.batchId && deleteModal.batchId !== "unassigned") {
+        // Disenroll from this specific batch
+        const student = students.find(s => s.id === deleteModal.studentId);
+        if (student) {
+          const updatedBatches = (student.studentBatches || []).filter(
+            sb => sb.batchId !== deleteModal.batchId
+          );
+          if (updatedBatches.length === 0) {
+            // Delete student completely if they are not in any batch anymore
+            await api.deleteStudent(student.id);
+          } else {
+            await api.updateStudent(student.id, {
+              ...student,
+              studentBatches: updatedBatches
+            });
+          }
+        }
+      } else {
+        // Delete student completely
+        await api.deleteStudent(deleteModal.studentId);
+      }
       load();
     }
   };
@@ -151,7 +180,7 @@ export default function Students() {
     return !s.batchId || !batches.some(b => b.id === s.batchId);
   });
 
-  const renderStudentCard = (s) => {
+  const renderStudentCard = (s, batchId) => {
     const enrolledList = s.studentBatches && s.studentBatches.length > 0 
       ? s.studentBatches 
       : (s.batchId ? [{ batchId: s.batchId, discount: s.discount || 0, finalFee: s.finalFee || 0 }] : []);
@@ -219,7 +248,7 @@ export default function Students() {
               <Edit3 size={16} />
             </button>
             <button
-              onClick={() => del(s.id)}
+              onClick={() => del(s.id, batchId)}
               className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
             >
               <Trash2 size={16} />
@@ -235,10 +264,17 @@ export default function Students() {
 
       <ConfirmModal
         isOpen={deleteModal.isOpen}
-        onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+        onClose={() => setDeleteModal({ isOpen: false, studentId: null, studentName: "", batchId: null, batchName: "", isLastBatch: false })}
         onConfirm={handleConfirmDelete}
-        title="Delete Student?"
-        message={`Are you sure you want to delete ${deleteModal.studentName}? This action will remove all their records permanently.`}
+        title={deleteModal.batchId && deleteModal.batchId !== "unassigned" ? (deleteModal.isLastBatch ? "Delete Student?" : "Remove from Batch?") : "Delete Student?"}
+        message={
+          deleteModal.batchId && deleteModal.batchId !== "unassigned"
+            ? (deleteModal.isLastBatch 
+                ? `Are you sure you want to remove ${deleteModal.studentName} from ${deleteModal.batchName}? Since this is their only batch, they will be permanently deleted from the database.`
+                : `Are you sure you want to remove ${deleteModal.studentName} from ${deleteModal.batchName}?`
+              )
+            : `Are you sure you want to delete ${deleteModal.studentName}? This action will remove all their records permanently.`
+        }
         confirmText="Yes, Delete"
       />
 
@@ -529,7 +565,7 @@ export default function Students() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {batchStudents.map(s => renderStudentCard(s))}
+                        {batchStudents.map(s => renderStudentCard(s, b.id))}
                       </div>
                     )}
                   </div>
@@ -577,7 +613,7 @@ export default function Students() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {unassignedStudents.map(s => renderStudentCard(s))}
+                    {unassignedStudents.map(s => renderStudentCard(s, "unassigned"))}
                   </div>
                 )}
               </div>

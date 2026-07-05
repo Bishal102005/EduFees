@@ -322,7 +322,8 @@ app.post('/api/students', async (req, res) => {
   const { name, mobile, email, address, batchId, discount, finalFee, batches } = req.body;
   try {
     // Determine primary batch for backwards compatibility columns
-    const batchList = Array.isArray(batches) && batches.length > 0 ? batches : [{ batchId, discount, finalFee }];
+    const hasBatchesField = Array.isArray(batches);
+    const batchList = hasBatchesField ? batches : (batchId ? [{ batchId, discount, finalFee }] : []);
     const primaryBatch = batchList[0] || {};
 
     const { data: student, error } = await supabase
@@ -332,9 +333,9 @@ app.post('/api/students', async (req, res) => {
         mobile,
         email,
         address,
-        batch_id: primaryBatch.batchId || primaryBatch.batch_id || batchId || null,
-        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (discount || 0),
-        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (finalFee || 0)
+        batch_id: primaryBatch.batchId || primaryBatch.batch_id || (hasBatchesField ? null : batchId) || null,
+        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (hasBatchesField ? 0 : (discount || 0)),
+        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (hasBatchesField ? 0 : (finalFee || 0))
       }])
       .select()
       .single();
@@ -383,7 +384,8 @@ app.put('/api/students/:id', async (req, res) => {
   const { id } = req.params;
   const { name, mobile, email, address, batchId, discount, finalFee, batches } = req.body;
   try {
-    const batchList = Array.isArray(batches) && batches.length > 0 ? batches : [{ batchId, discount, finalFee }];
+    const hasBatchesField = Array.isArray(batches);
+    const batchList = hasBatchesField ? batches : (batchId ? [{ batchId, discount, finalFee }] : []);
     const primaryBatch = batchList[0] || {};
 
     const { data: student, error } = await supabase
@@ -393,9 +395,9 @@ app.put('/api/students/:id', async (req, res) => {
         mobile,
         email,
         address,
-        batch_id: primaryBatch.batchId || primaryBatch.batch_id || batchId || null,
-        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (discount || 0),
-        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (finalFee || 0)
+        batch_id: primaryBatch.batchId || primaryBatch.batch_id || (hasBatchesField ? null : batchId) || null,
+        discount: primaryBatch.discount !== undefined ? primaryBatch.discount : (hasBatchesField ? 0 : (discount || 0)),
+        final_fee: primaryBatch.finalFee !== undefined ? primaryBatch.finalFee : (hasBatchesField ? 0 : (finalFee || 0))
       })
       .eq('id', id)
       .select()
