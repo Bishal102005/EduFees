@@ -342,17 +342,17 @@ export default function Reports() {
 
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span>Total Records</span>
-              <span className="font-bold">{data.fees.length}</span>
+              <span>Total Dues</span>
+              <span className="font-bold">{filteredPaidFees.length + filteredPendingDues.length}</span>
             </div>
 
             <div className="flex justify-between">
-              <span>Total Paid Records</span>
+              <span>Paid Dues</span>
               <span className="font-bold">{filteredPaidFees.length}</span>
             </div>
 
             <div className="flex justify-between">
-              <span>Total Pending Dues</span>
+              <span>Pending Dues</span>
               <span className="text-amber-600 font-bold">
                 {filteredPendingDues.length}
               </span>
