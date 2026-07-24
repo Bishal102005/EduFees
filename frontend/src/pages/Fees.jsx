@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/api";
-import { Plus, Check, AlertCircle, IndianRupee } from "lucide-react";
+import { Plus, Check, AlertCircle, IndianRupee, Search, X } from "lucide-react";
 import Layout from "../components/Layout";
 
 const MONTHS = [
@@ -13,6 +13,7 @@ export default function Fees() {
   const [students, setStudents] = useState([]);
   const [batches, setBatches] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [form, setForm] = useState({
     studentId: "",
@@ -81,20 +82,58 @@ export default function Fees() {
         : (selectedStudentObj.batchId ? [{ batchId: selectedStudentObj.batchId, finalFee: selectedStudentObj.finalFee }] : []))
     : [];
 
+  const filteredFees = fees.filter(f => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const student = students.find(s => s.id === f.studentId);
+    const batch = batches.find(b => b.id === f.batchId);
+
+    const nameMatch = student?.name?.toLowerCase().includes(q);
+    const mobileMatch = student?.mobile?.includes(q);
+    const batchMatch = batch?.name?.toLowerCase().includes(q);
+    const monthMatch = f.month?.toLowerCase().includes(q);
+    const statusMatch = f.status?.toLowerCase().includes(q);
+
+    return nameMatch || mobileMatch || batchMatch || monthMatch || statusMatch;
+  });
+
   return (
     <Layout title="Fees" subtitle="Track payments & collections">
 
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 
         <h2 className="text-xl font-bold text-slate-900">Fee Records</h2>
 
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition"
-        >
-          <Plus size={16} /> Collect Fee
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          {/* SEARCH INPUT */}
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search fee records..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="border rounded-xl pl-9 pr-9 py-2 w-full sm:w-64 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition font-semibold text-sm shadow-sm"
+          >
+            <Plus size={16} /> Collect Fee
+          </button>
+        </div>
 
       </div>
 
@@ -229,7 +268,14 @@ export default function Fees() {
       {/* FEES CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
-        {fees.map(f => {
+        {filteredFees.length === 0 ? (
+          <div className="sm:col-span-2 lg:col-span-3 bg-white border rounded-2xl p-8 text-center flex flex-col items-center justify-center">
+            <Search className="text-slate-300 mb-2" size={32} />
+            <p className="font-semibold text-slate-700">No fee records found</p>
+            <p className="text-xs text-slate-400 mt-1">Try adjusting your search query.</p>
+          </div>
+        ) : (
+          filteredFees.map(f => {
           const student = students.find(s => s.id === f.studentId);
           const batch = batches.find(b => b.id === f.batchId);
 
@@ -301,7 +347,7 @@ export default function Fees() {
 
             </div>
           );
-        })}
+        }))}
 
       </div>
 

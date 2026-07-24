@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/api";
-import { Plus, Edit3, Trash2, User, ChevronDown, ChevronUp, Search, BookOpen } from "lucide-react";
+import { Plus, Edit3, Trash2, User, ChevronDown, ChevronUp, Search, BookOpen, X } from "lucide-react";
 import Layout from "../components/Layout";
 import ConfirmModal from "../components/ConfirmModal";
 
@@ -157,11 +157,26 @@ export default function Students() {
   };
 
   // Filter students based on search query
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = trimmedQuery.length > 0;
+
   const filteredStudents = students.filter(s => {
-    const nameMatch = s.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    const mobileMatch = s.mobile?.includes(searchQuery);
-    const emailMatch = s.email?.toLowerCase().includes(searchQuery.toLowerCase());
-    return nameMatch || mobileMatch || emailMatch;
+    if (!isSearching) return true;
+    const nameMatch = s.name?.toLowerCase().includes(trimmedQuery);
+    const mobileMatch = s.mobile?.includes(trimmedQuery);
+    const emailMatch = s.email?.toLowerCase().includes(trimmedQuery);
+    const addressMatch = s.address?.toLowerCase().includes(trimmedQuery);
+
+    const sBatches = s.studentBatches && s.studentBatches.length > 0
+      ? s.studentBatches
+      : (s.batchId ? [{ batchId: s.batchId }] : []);
+
+    const batchMatch = sBatches.some(sb => {
+      const bObj = batches.find(b => b.id === sb.batchId);
+      return bObj?.name?.toLowerCase().includes(trimmedQuery) || bObj?.subject?.toLowerCase().includes(trimmedQuery);
+    });
+
+    return nameMatch || mobileMatch || emailMatch || addressMatch || batchMatch;
   });
 
   // Group students by batchId (supporting multiple batches per student)
@@ -292,11 +307,20 @@ export default function Students() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="Search students..."
+              placeholder="Search by name, mobile, email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="border rounded-xl pl-9 pr-4 py-2 w-full sm:w-60 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              className="border rounded-xl pl-9 pr-9 py-2 w-full sm:w-64 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
+                title="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
 
           <button
@@ -432,195 +456,250 @@ export default function Students() {
         </div>
       )}
 
-      {/* BATCH FILTER TABS */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-6 scrollbar-hide">
-        <button
-          onClick={() => setSelectedBatchId("all")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
-            selectedBatchId === "all"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
-              : "bg-white border text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          <span>All Students</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            selectedBatchId === "all" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
-          }`}>
-            {filteredStudents.length}
-          </span>
-        </button>
-
-        {batches.map(b => {
-          const count = filteredStudents.filter(s => s.batchId === b.id).length;
-          const active = selectedBatchId === b.id;
-          return (
+      {/* SEARCH RESULTS VIEW VS REGULAR BATCH ROSTER */}
+      {isSearching ? (
+        <div className="space-y-4 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-indigo-50/80 border border-indigo-100 rounded-2xl p-4 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0">
+                <Search size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">
+                  Search Results for "{searchQuery}"
+                </h3>
+                <p className="text-xs text-indigo-700 font-medium">
+                  Found {filteredStudents.length} matching {filteredStudents.length === 1 ? "student" : "students"}
+                </p>
+              </div>
+            </div>
             <button
-              key={b.id}
-              onClick={() => setSelectedBatchId(b.id)}
+              onClick={() => setSearchQuery("")}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-200 px-3 py-2 rounded-xl flex items-center justify-center gap-1 hover:bg-indigo-50 transition shadow-xs self-start sm:self-auto"
+            >
+              <X size={14} /> Clear Search
+            </button>
+          </div>
+
+          {filteredStudents.length === 0 ? (
+            <div className="bg-white border rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center justify-center shadow-xs">
+              <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-4">
+                <Search size={28} />
+              </div>
+              <h3 className="font-bold text-slate-800 text-lg mb-1">No matching students found</h3>
+              <p className="text-slate-500 text-sm max-w-md mb-6">
+                We couldn't find any students matching <span className="font-semibold text-slate-700">"{searchQuery}"</span>. Try searching by student name, phone number, email address, or batch name.
+              </p>
+              <button
+                onClick={() => setSearchQuery("")}
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition shadow-sm flex items-center gap-2"
+              >
+                <X size={16} /> Clear Search Filter
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredStudents.map(s => renderStudentCard(s, s.batchId || "unassigned"))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* BATCH FILTER TABS */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-6 scrollbar-hide">
+            <button
+              onClick={() => setSelectedBatchId("all")}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
-                active
+                selectedBatchId === "all"
                   ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
                   : "bg-white border text-slate-600 hover:bg-slate-50"
               }`}
             >
-              <span>{b.name}</span>
+              <span>All Students</span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                active ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
+                selectedBatchId === "all" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
               }`}>
-                {count}
+                {students.length}
               </span>
             </button>
-          );
-        })}
 
-        <button
-          onClick={() => setSelectedBatchId("unassigned")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
-            selectedBatchId === "unassigned"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
-              : "bg-white border text-slate-600 hover:bg-slate-50"
-          }`}
-        >
-          <span>Unassigned</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            selectedBatchId === "unassigned" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
-          }`}>
-            {unassignedStudents.length}
-          </span>
-        </button>
-      </div>
-
-      {/* ROSTER SECTION */}
-      <div className="space-y-6">
-        {/* Render selected batches */}
-        {batches
-          .filter(b => selectedBatchId === "all" || selectedBatchId === b.id)
-          .map(b => {
-            const batchStudents = groupedStudents[b.id] || [];
-            const isCollapsed = collapsedBatches[b.id] || false;
-
-            return (
-              <div key={b.id} className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition duration-200">
-                {/* BATCH HEADER */}
-                <div 
-                  onClick={() => toggleBatchCollapse(b.id)}
-                  className="p-4 bg-slate-50/70 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50 transition"
+            {batches.map(b => {
+              const count = students.filter(s => 
+                s.studentBatches && s.studentBatches.length > 0 
+                  ? s.studentBatches.some(sb => sb.batchId === b.id) 
+                  : s.batchId === b.id
+              ).length;
+              const active = selectedBatchId === b.id;
+              return (
+                <button
+                  key={b.id}
+                  onClick={() => setSelectedBatchId(b.id)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
+                    active
+                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
+                      : "bg-white border text-slate-600 hover:bg-slate-50"
+                  }`}
                 >
-                  <div className="flex items-start md:items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                      <BookOpen size={20} />
+                  <span>{b.name}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    active ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setSelectedBatchId("unassigned")}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
+                selectedBatchId === "unassigned"
+                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
+                  : "bg-white border text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <span>Unassigned</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                selectedBatchId === "unassigned" ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-600"
+              }`}>
+                {unassignedStudents.length}
+              </span>
+            </button>
+          </div>
+
+          {/* ROSTER SECTION */}
+          <div className="space-y-6">
+            {/* Render selected batches */}
+            {batches
+              .filter(b => selectedBatchId === "all" || selectedBatchId === b.id)
+              .map(b => {
+                const batchStudents = groupedStudents[b.id] || [];
+                const isCollapsed = collapsedBatches[b.id] || false;
+
+                return (
+                  <div key={b.id} className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition duration-200">
+                    {/* BATCH HEADER */}
+                    <div 
+                      onClick={() => toggleBatchCollapse(b.id)}
+                      className="p-4 bg-slate-50/70 border-b flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50 transition"
+                    >
+                      <div className="flex items-start md:items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                          <BookOpen size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-slate-900 text-base md:text-lg">
+                              {b.name}
+                            </h3>
+                            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+                              {batchStudents.length} {batchStudents.length === 1 ? "Student" : "Students"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 flex items-center gap-3 mt-1 flex-wrap">
+                            <span>📚 {b.subject}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span>🕒 {b.schedule}</span>
+                            <span className="hidden sm:inline">•</span>
+                            <span>💰 ₹{b.monthlyFee}/mo</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between md:justify-end gap-3 self-stretch md:self-auto border-t md:border-t-0 pt-2 md:pt-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAddForm(b.id);
+                          }}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
+                        >
+                          <Plus size={14} /> Add Student
+                        </button>
+
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 transition hover:bg-slate-200">
+                          {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* STUDENTS GRID */}
+                    {!isCollapsed && (
+                      <div className="p-4 sm:p-5">
+                        {batchStudents.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30">
+                            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                              <User size={24} />
+                            </div>
+                            <h4 className="font-semibold text-slate-700 text-sm mb-1">No students in this batch</h4>
+                            <p className="text-xs text-slate-400 max-w-xs mb-3">Add new students to assign them to {b.name}.</p>
+                            <button
+                              onClick={() => openAddForm(b.id)}
+                              className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-1"
+                            >
+                              <Plus size={12} /> Add Student
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {batchStudents.map(s => renderStudentCard(s, b.id))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+            {/* Render Unassigned Students section */}
+            {(selectedBatchId === "all" || selectedBatchId === "unassigned") && (
+              <div className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition duration-200">
+                {/* UNASSIGNED HEADER */}
+                <div 
+                  onClick={() => toggleBatchCollapse("unassigned")}
+                  className="p-4 bg-slate-50/70 border-b flex items-center justify-between cursor-pointer select-none hover:bg-slate-50 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                      <User size={20} />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
                         <h3 className="font-bold text-slate-900 text-base md:text-lg">
-                          {b.name}
+                          Unassigned Students
                         </h3>
-                        <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
-                          {batchStudents.length} {batchStudents.length === 1 ? "Student" : "Students"}
+                        <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
+                          {unassignedStudents.length}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500 flex items-center gap-3 mt-1 flex-wrap">
-                        <span>📚 {b.subject}</span>
-                        <span className="hidden sm:inline">•</span>
-                        <span>🕒 {b.schedule}</span>
-                        <span className="hidden sm:inline">•</span>
-                        <span>💰 ₹{b.monthlyFee}/mo</span>
-                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">Students not enrolled in any batch</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between md:justify-end gap-3 self-stretch md:self-auto border-t md:border-t-0 pt-2 md:pt-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddForm(b.id);
-                      }}
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition"
-                    >
-                      <Plus size={14} /> Add Student
-                    </button>
-
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 transition hover:bg-slate-200">
-                      {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                    </div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 transition hover:bg-slate-200">
+                    {collapsedBatches["unassigned"] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
                   </div>
                 </div>
 
-                {/* STUDENTS GRID */}
-                {!isCollapsed && (
+                {/* UNASSIGNED GRID */}
+                {!collapsedBatches["unassigned"] && (
                   <div className="p-4 sm:p-5">
-                    {batchStudents.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-8 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/30">
-                        <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
-                          <User size={24} />
-                        </div>
-                        <h4 className="font-semibold text-slate-700 text-sm mb-1">No students in this batch</h4>
-                        <p className="text-xs text-slate-400 max-w-xs mb-3">Add new students to assign them to {b.name}.</p>
-                        <button
-                          onClick={() => openAddForm(b.id)}
-                          className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-1"
-                        >
-                          <Plus size={12} /> Add Student
-                        </button>
+                    {unassignedStudents.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-6 px-4 text-center border border-dashed rounded-xl bg-slate-50/20">
+                        <p className="text-xs text-slate-400 text-center">All students are assigned to a batch.</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {batchStudents.map(s => renderStudentCard(s, b.id))}
+                        {unassignedStudents.map(s => renderStudentCard(s, "unassigned"))}
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            );
-          })}
-
-        {/* Render Unassigned Students section */}
-        {(selectedBatchId === "all" || selectedBatchId === "unassigned") && (
-          <div className="bg-white border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition duration-200">
-            {/* UNASSIGNED HEADER */}
-            <div 
-              onClick={() => toggleBatchCollapse("unassigned")}
-              className="p-4 bg-slate-50/70 border-b flex items-center justify-between cursor-pointer select-none hover:bg-slate-50 transition"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                  <User size={20} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-900 text-base md:text-lg">
-                      Unassigned Students
-                    </h3>
-                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold">
-                      {unassignedStudents.length}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">Students not enrolled in any batch</p>
-                </div>
-              </div>
-
-              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 transition hover:bg-slate-200">
-                {collapsedBatches["unassigned"] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-              </div>
-            </div>
-
-            {/* UNASSIGNED GRID */}
-            {!collapsedBatches["unassigned"] && (
-              <div className="p-4 sm:p-5">
-                {unassignedStudents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-6 px-4 text-center border border-dashed rounded-xl bg-slate-50/20">
-                    <p className="text-xs text-slate-400 text-center">All students are assigned to a batch.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {unassignedStudents.map(s => renderStudentCard(s, "unassigned"))}
-                  </div>
-                )}
-              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
     </Layout>
   );
