@@ -194,7 +194,18 @@ function LoginScreen({ onAuth }) {
 
         {/* Footer note */}
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <p style={{ fontSize: '0.75rem', color: '#334155' }}>©  2026 BS Creation — All rights reserved</p>
+          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>
+            © {new Date().getFullYear()}{' '}
+            <a
+              href="https://bscreation.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'underline' }}
+            >
+              BS Creation
+            </a>{' '}
+            — All rights reserved
+          </p>
         </div>
       </div>
 

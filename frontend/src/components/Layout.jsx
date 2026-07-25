@@ -62,6 +62,33 @@ export default function Layout({
           {children}
         </main>
 
+        {/* FOOTER */}
+        <footer className="border-t border-slate-200 bg-white py-3.5 px-4 sm:px-6 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p>
+            © {new Date().getFullYear()}{" "}
+            <a
+              href="https://bscreation.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-slate-700 hover:text-indigo-600 transition"
+            >
+              BS Creation
+            </a>{" "}
+            — All rights reserved
+          </p>
+          <p className="flex items-center gap-1">
+            <span>Visit:</span>
+            <a
+              href="https://bscreation.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 font-semibold hover:text-indigo-800 hover:underline transition"
+            >
+              bscreation.netlify.app
+            </a>
+          </p>
+        </footer>
+
       </div>
     </div>
   );

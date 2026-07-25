@@ -267,6 +267,33 @@ export default function StudentDashboard({ studentId, onLogout }) {
           </div>
         </Card>
 
+        {/* FOOTER */}
+        <footer className="mt-8 border-t border-white/10 pt-4 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-2">
+          <p>
+            © {new Date().getFullYear()}{" "}
+            <a
+              href="https://bscreation.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-indigo-400 hover:underline"
+            >
+              BS Creation
+            </a>{" "}
+            — All rights reserved
+          </p>
+          <p className="flex items-center gap-1">
+            <span>Visit:</span>
+            <a
+              href="https://bscreation.netlify.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 font-semibold hover:underline"
+            >
+              bscreation.netlify.app
+            </a>
+          </p>
+        </footer>
+
       </main>
     </div>
   );
