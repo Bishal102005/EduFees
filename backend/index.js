@@ -212,14 +212,18 @@ app.get('/api/batches', async (req, res) => {
 });
 
 app.post('/api/batches', async (req, res) => {
-  const { name, subject, schedule, monthlyFee, startMonth, startYear } = req.body;
+  const { name, subject, schedule, monthlyFee, feeType, startMonth, startYear } = req.body;
+  const isFull = feeType === 'full';
+  const rawSchedule = schedule ? schedule.replace(/\[FULL\]\s*/g, '') : '';
+  const dbSchedule = isFull ? `[FULL] ${rawSchedule}`.trim() : rawSchedule;
+
   try {
     const { data, error } = await supabase
       .from('batches')
       .insert([{
         name,
         subject,
-        schedule,
+        schedule: dbSchedule,
         monthly_fee: monthlyFee,
         start_month: startMonth,
         start_year: startYear,
@@ -236,14 +240,18 @@ app.post('/api/batches', async (req, res) => {
 
 app.put('/api/batches/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, subject, schedule, monthlyFee, startMonth, startYear } = req.body;
+  const { name, subject, schedule, monthlyFee, feeType, startMonth, startYear } = req.body;
+  const isFull = feeType === 'full';
+  const rawSchedule = schedule ? schedule.replace(/\[FULL\]\s*/g, '') : '';
+  const dbSchedule = isFull ? `[FULL] ${rawSchedule}`.trim() : rawSchedule;
+
   try {
     const { data, error } = await supabase
       .from('batches')
       .update({
         name,
         subject,
-        schedule,
+        schedule: dbSchedule,
         monthly_fee: monthlyFee,
         start_month: startMonth,
         start_year: startYear,
@@ -590,23 +598,13 @@ async function calculatePendingBalances(specificStudentId = null) {
 
       const targetAmount = Number(enrollment.final_fee !== undefined && enrollment.final_fee !== null ? enrollment.final_fee : (batch.monthly_fee || 0));
 
-      let iterMonth = MONTHS.indexOf(batch.start_month);
-      let iterYear = Number(batch.start_year || currentYear);
+      const isFullFee = batch.fee_type === 'full' || (batch.schedule && batch.schedule.includes('[FULL]'));
 
-      if (iterMonth < 0 || !iterYear) {
-        const joinDate = new Date(student.join_date || student.created_at);
-        iterMonth = joinDate.getMonth();
-        iterYear = joinDate.getFullYear();
-      }
-
-      while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
-        const monthName = MONTHS[iterMonth];
-
-        const records = fees.filter(f => 
+      if (isFullFee) {
+        // Full Course Fee / Installment model: Dues = Total Batch Fee - Total Paid Payments
+        const records = fees.filter(f =>
           f.student_id === student.id &&
-          (f.batch_id ? f.batch_id === batch.id : true) &&
-          f.month === monthName &&
-          f.year === iterYear
+          (f.batch_id ? f.batch_id === batch.id : true)
         );
 
         const paidSum = records
@@ -617,11 +615,41 @@ async function calculatePendingBalances(specificStudentId = null) {
         if (pendingBalance > 0) {
           totalPendingAmount += pendingBalance;
         }
+      } else {
+        // Monthly Recurring model
+        let iterMonth = MONTHS.indexOf(batch.start_month);
+        let iterYear = Number(batch.start_year || currentYear);
 
-        iterMonth++;
-        if (iterMonth > 11) {
-          iterMonth = 0;
-          iterYear++;
+        if (iterMonth < 0 || !iterYear) {
+          const joinDate = new Date(student.join_date || student.created_at);
+          iterMonth = joinDate.getMonth();
+          iterYear = joinDate.getFullYear();
+        }
+
+        while (iterYear < currentYear || (iterYear === currentYear && iterMonth <= currentMonthIdx)) {
+          const monthName = MONTHS[iterMonth];
+
+          const records = fees.filter(f => 
+            f.student_id === student.id &&
+            (f.batch_id ? f.batch_id === batch.id : true) &&
+            f.month === monthName &&
+            f.year === iterYear
+          );
+
+          const paidSum = records
+            .filter(f => f.status === 'paid')
+            .reduce((sum, f) => sum + Number(f.amount), 0);
+
+          const pendingBalance = targetAmount - paidSum;
+          if (pendingBalance > 0) {
+            totalPendingAmount += pendingBalance;
+          }
+
+          iterMonth++;
+          if (iterMonth > 11) {
+            iterMonth = 0;
+            iterYear++;
+          }
         }
       }
     });

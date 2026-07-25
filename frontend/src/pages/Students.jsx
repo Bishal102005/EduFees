@@ -382,6 +382,7 @@ export default function Students() {
                 {batches.map(b => {
                   const enrolledItem = form.studentBatches.find(sb => sb.batchId === b.id);
                   const isSelected = !!enrolledItem;
+                  const isFullFee = b.feeType === 'full';
 
                   return (
                     <div key={b.id} className={`p-3 rounded-xl border transition ${isSelected ? 'bg-indigo-50/60 border-indigo-200' : 'bg-white border-slate-200'}`}>
@@ -394,8 +395,15 @@ export default function Students() {
                             className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                           />
                           <div>
-                            <p className="font-semibold text-slate-900 text-sm">{b.name}</p>
-                            <p className="text-xs text-slate-500">{b.subject} • Base Fee: ₹{b.monthlyFee}/mo</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-slate-900 text-sm">{b.name}</p>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                isFullFee ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {isFullFee ? 'Full Course Fee' : 'Monthly'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500">{b.subject} • Base Fee: ₹{b.monthlyFee}{isFullFee ? ' (Total)' : '/mo'}</p>
                           </div>
                         </div>
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
@@ -416,7 +424,9 @@ export default function Students() {
                             />
                           </div>
                           <div className="flex-1">
-                            <label className="text-xs text-slate-500 block mb-1">Final Monthly Fee (₹)</label>
+                            <label className="text-xs text-slate-500 block mb-1">
+                              {isFullFee ? 'Final Total Fee (₹)' : 'Final Monthly Fee (₹)'}
+                            </label>
                             <input
                               type="number"
                               value={enrolledItem.finalFee}

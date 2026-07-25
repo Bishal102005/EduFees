@@ -72,12 +72,16 @@ const isSupabaseConfigured = Boolean(
 
 // Helper to map snake_case to camelCase
 function mapBatch(b) {
+  const isFull = b.fee_type === 'full' || (b.schedule && b.schedule.includes('[FULL]'));
+  const cleanSchedule = b.schedule ? b.schedule.replace(/\[FULL\]\s*/g, '') : '';
+
   return {
     id: b.id,
     name: b.name,
     subject: b.subject,
-    schedule: b.schedule,
+    schedule: cleanSchedule,
     monthlyFee: Number(b.monthly_fee),
+    feeType: isFull ? 'full' : 'monthly',
     startMonth: b.start_month || 'January',
     startYear: Number(b.start_year || new Date().getFullYear()),
     createdAt: b.created_at,
@@ -185,6 +189,10 @@ export const api = {
   },
 
   async addBatch(batch) {
+    const isFull = batch.feeType === 'full';
+    const rawSchedule = batch.schedule ? batch.schedule.replace(/\[FULL\]\s*/g, '') : '';
+    const dbSchedule = isFull ? `[FULL] ${rawSchedule}`.trim() : rawSchedule;
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
@@ -192,7 +200,7 @@ export const api = {
           .insert([{
             name: batch.name,
             subject: batch.subject,
-            schedule: batch.schedule,
+            schedule: dbSchedule,
             monthly_fee: batch.monthlyFee,
             start_month: batch.startMonth,
             start_year: batch.startYear,
@@ -205,12 +213,16 @@ export const api = {
       }
     }
     const list = JSON.parse(localStorage.getItem('fees_batches') || '[]');
-    list.push(batch);
+    list.push({ ...batch, schedule: dbSchedule });
     localStorage.setItem('fees_batches', JSON.stringify(list));
     return batch;
   },
 
   async updateBatch(id, batch) {
+    const isFull = batch.feeType === 'full';
+    const rawSchedule = batch.schedule ? batch.schedule.replace(/\[FULL\]\s*/g, '') : '';
+    const dbSchedule = isFull ? `[FULL] ${rawSchedule}`.trim() : rawSchedule;
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
@@ -218,7 +230,7 @@ export const api = {
           .update({
             name: batch.name,
             subject: batch.subject,
-            schedule: batch.schedule,
+            schedule: dbSchedule,
             monthly_fee: batch.monthlyFee,
             start_month: batch.startMonth,
             start_year: batch.startYear,
@@ -232,7 +244,7 @@ export const api = {
       }
     }
     const list = JSON.parse(localStorage.getItem('fees_batches') || '[]');
-    const updated = list.map((b) => (b.id === id ? batch : b));
+    const updated = list.map((b) => (b.id === id ? { ...batch, schedule: dbSchedule } : b));
     localStorage.setItem('fees_batches', JSON.stringify(updated));
     return batch;
   },

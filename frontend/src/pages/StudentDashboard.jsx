@@ -103,8 +103,12 @@ export default function StudentDashboard({ studentId, onLogout }) {
 
   let totalExpectedFee = 0;
   enrolledBatches.forEach(batch => {
-    const months = monthsFromBatchStart(batch);
-    totalExpectedFee += (months * Number(batch.customFee || 0));
+    if (batch.feeType === 'full') {
+      totalExpectedFee += Number(batch.customFee || 0);
+    } else {
+      const months = monthsFromBatchStart(batch);
+      totalExpectedFee += (months * Number(batch.customFee || 0));
+    }
   });
   if (enrolledBatches.length === 0) totalExpectedFee = totalPaid;
 
@@ -187,10 +191,20 @@ export default function StudentDashboard({ studentId, onLogout }) {
               <div className="space-y-4">
                 {enrolledBatches.map(batch => (
                   <div key={batch.id} className="bg-white/5 p-3 rounded-xl border border-white/10 space-y-1 text-sm">
-                    <p className="font-semibold text-indigo-300">{batch.name}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-indigo-300">{batch.name}</p>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                        batch.feeType === 'full' ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'
+                      }`}>
+                        {batch.feeType === 'full' ? 'Full Fee' : 'Monthly'}
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-300">📚 Subject: {batch.subject}</p>
                     <p className="text-xs text-gray-300">🕒 Schedule: {batch.schedule}</p>
-                    <p className="text-xs text-gray-400 font-medium mt-1">Monthly Fee: <span className="text-indigo-400 font-bold text-sm">₹{batch.customFee}</span></p>
+                    <p className="text-xs text-gray-400 font-medium mt-1">
+                      {batch.feeType === 'full' ? 'Full Course Fee: ' : 'Monthly Fee: '}
+                      <span className="text-indigo-400 font-bold text-sm">₹{batch.customFee}</span>
+                    </p>
                   </div>
                 ))}
               </div>

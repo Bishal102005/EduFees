@@ -75,6 +75,41 @@ export default function Fees() {
     load();
   };
 
+  const [studentSearchInput, setStudentSearchInput] = useState("");
+  const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+
+  const selectStudent = (student) => {
+    if (!student) {
+      setForm({ ...form, studentId: "", batchId: "", amount: "" });
+      setStudentSearchInput("");
+      return;
+    }
+
+    setStudentSearchInput(student.name);
+    const sId = student.id;
+    const sBatches = student.studentBatches && student.studentBatches.length > 0
+      ? student.studentBatches
+      : (student.batchId ? [{ batchId: student.batchId, finalFee: student.finalFee }] : []);
+    
+    const firstBatch = sBatches[0] || {};
+    const bObj = batches.find(b => b.id === firstBatch.batchId);
+    
+    let autoFee = firstBatch.finalFee !== undefined ? firstBatch.finalFee : (student ? student.finalFee : "");
+    if (bObj && (bObj.feeType === 'full' || (bObj.schedule && bObj.schedule.includes('[FULL]'))) && sId && firstBatch.batchId) {
+      const paidSum = fees
+        .filter(f => f.studentId === sId && f.batchId === firstBatch.batchId && f.status === 'paid')
+        .reduce((sum, f) => sum + Number(f.amount), 0);
+      autoFee = Math.max(0, Number(autoFee) - paidSum);
+    }
+
+    setForm({ 
+      ...form, 
+      studentId: sId,
+      batchId: firstBatch.batchId || "",
+      amount: autoFee
+    });
+  };
+
   const selectedStudentObj = students.find(s => s.id === form.studentId);
   const studentBatchesList = selectedStudentObj
     ? (selectedStudentObj.studentBatches && selectedStudentObj.studentBatches.length > 0
@@ -128,7 +163,11 @@ export default function Fees() {
           </div>
 
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              setStudentSearchInput("");
+              setShowStudentDropdown(false);
+            }}
             className="bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition font-semibold text-sm shadow-sm"
           >
             <Plus size={16} /> Collect Fee
@@ -141,106 +180,258 @@ export default function Fees() {
       {showForm && (
         <form className="bg-white border rounded-2xl p-4 sm:p-6 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-          <select
-            value={form.studentId}
-            onChange={(e) => {
-              const sId = e.target.value;
-              const student = students.find(s => s.id === sId);
-              const sBatches = student
-                ? (student.studentBatches && student.studentBatches.length > 0
-                    ? student.studentBatches
-                    : (student.batchId ? [{ batchId: student.batchId, finalFee: student.finalFee }] : []))
-                : [];
-              const firstBatch = sBatches[0] || {};
-              const defaultAmount = firstBatch.finalFee !== undefined ? firstBatch.finalFee : (student ? student.finalFee : "");
+          {/* SEARCHABLE STUDENT NAME INPUT / SELECTED STUDENT POSTER */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Student Name *
+            </label>
 
-              setForm({ 
-                ...form, 
-                studentId: sId,
-                batchId: firstBatch.batchId || "",
-                amount: defaultAmount
-              });
-            }}
-            className="border rounded-xl p-3"
-            required
-          >
-            <option value="">Select Student</option>
-            {students.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.mobile})
-              </option>
-            ))}
-          </select>
+            {selectedStudentObj ? (
+              /* STYLED SELECTED STUDENT POSTER CARD */
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl px-3 py-2 flex items-center justify-between shadow-xs h-[46px]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 bg-indigo-600 text-white font-bold rounded-lg flex items-center justify-center text-sm shadow-xs shrink-0">
+                    {selectedStudentObj.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="truncate">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-bold text-xs sm:text-sm text-slate-900 truncate">{selectedStudentObj.name}</p>
+                      <span className="bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shrink-0">
+                        <Check size={10} /> Selected
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate">📱 {selectedStudentObj.mobile}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectStudent(null);
+                    setShowStudentDropdown(true);
+                  }}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-200 px-2.5 py-1 rounded-lg hover:bg-indigo-50 transition shrink-0 ml-2 shadow-2xs"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              /* SEARCH INPUT FIELD */
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Type or write student name..."
+                    value={studentSearchInput}
+                    onChange={(e) => {
+                      setStudentSearchInput(e.target.value);
+                      setShowStudentDropdown(true);
+                    }}
+                    onFocus={() => setShowStudentDropdown(true)}
+                    className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none pr-8 bg-white"
+                    required
+                  />
+                  {studentSearchInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectStudent(null);
+                        setShowStudentDropdown(true);
+                      }}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
 
-          <select
-            value={form.batchId}
-            onChange={(e) => {
-              const bId = e.target.value;
-              const matchedEnrollment = studentBatchesList.find(b => b.batchId === bId);
-              const bObj = batches.find(b => b.id === bId);
-              const autoFee = matchedEnrollment ? matchedEnrollment.finalFee : (bObj ? bObj.monthlyFee : form.amount);
-              setForm({ ...form, batchId: bId, amount: autoFee });
-            }}
-            className="border rounded-xl p-3"
-            disabled={!form.studentId}
-          >
-            <option value="">Select Batch (Optional)</option>
-            {studentBatchesList.map(item => {
-              const bObj = batches.find(b => b.id === item.batchId);
+                {showStudentDropdown && (
+                  <div 
+                    className="absolute z-30 left-0 right-0 mt-1 bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto divide-y"
+                  >
+                    {students
+                      .filter(s => {
+                        if (!studentSearchInput.trim()) return true;
+                        const q = studentSearchInput.toLowerCase().trim();
+                        return s.name.toLowerCase().includes(q) || (s.mobile && s.mobile.includes(q));
+                      })
+                      .map(s => (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            selectStudent(s);
+                            setShowStudentDropdown(false);
+                          }}
+                          className="p-3 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition"
+                        >
+                          <div>
+                            <p className="font-semibold text-sm text-slate-900">{s.name}</p>
+                            <p className="text-xs text-slate-500">📱 {s.mobile}</p>
+                          </div>
+                          <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                            Select
+                          </span>
+                        </div>
+                      ))}
+                    {students.filter(s => {
+                      if (!studentSearchInput.trim()) return true;
+                      const q = studentSearchInput.toLowerCase().trim();
+                      return s.name.toLowerCase().includes(q) || (s.mobile && s.mobile.includes(q));
+                    }).length === 0 && (
+                      <div className="p-4 text-xs text-slate-400 text-center italic">
+                        No students found matching "{studentSearchInput}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* BATCH SELECT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Enrolled Batch
+            </label>
+            <select
+              value={form.batchId}
+              onChange={(e) => {
+                const bId = e.target.value;
+                const matchedEnrollment = studentBatchesList.find(b => b.batchId === bId);
+                const bObj = batches.find(b => b.id === bId);
+                let autoFee = matchedEnrollment ? matchedEnrollment.finalFee : (bObj ? bObj.monthlyFee : form.amount);
+
+                if (bObj && (bObj.feeType === 'full' || (bObj.schedule && bObj.schedule.includes('[FULL]'))) && form.studentId && bId) {
+                  const paidSum = fees
+                    .filter(f => f.studentId === form.studentId && f.batchId === bId && f.status === 'paid')
+                    .reduce((sum, f) => sum + Number(f.amount), 0);
+                  autoFee = Math.max(0, Number(autoFee) - paidSum);
+                }
+
+                setForm({ ...form, batchId: bId, amount: autoFee });
+              }}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              disabled={!form.studentId}
+            >
+              <option value="">Select Batch (Optional)</option>
+              {studentBatchesList.map(item => {
+                const bObj = batches.find(b => b.id === item.batchId);
+                const isFullFee = bObj?.feeType === 'full' || (bObj?.schedule && bObj?.schedule.includes('[FULL]'));
+                return (
+                  <option key={item.batchId} value={item.batchId}>
+                    {bObj ? bObj.name : "Batch"} ({isFullFee ? 'Full Fee' : 'Monthly Fee'}: ₹{item.finalFee})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Dynamic Batch Fee Hint Info */}
+          {(() => {
+            const currentBatch = batches.find(b => b.id === form.batchId);
+            if (!currentBatch || !form.studentId) return null;
+
+            const isFullFee = currentBatch.feeType === 'full' || (currentBatch.schedule && currentBatch.schedule.includes('[FULL]'));
+            const matchedItem = studentBatchesList.find(b => b.batchId === form.batchId);
+            const totalFee = matchedItem ? Number(matchedItem.finalFee) : Number(currentBatch.monthlyFee);
+
+            if (isFullFee) {
+              const paidSum = fees
+                .filter(f => f.studentId === form.studentId && f.batchId === form.batchId && f.status === 'paid')
+                .reduce((sum, f) => sum + Number(f.amount), 0);
+              const remaining = Math.max(0, totalFee - paidSum);
+
               return (
-                <option key={item.batchId} value={item.batchId}>
-                  {bObj ? bObj.name : "Batch"} (Fee: ₹{item.finalFee})
-                </option>
+                <div className="sm:col-span-2 bg-purple-50 border border-purple-100 p-3 rounded-xl flex items-center justify-between text-xs text-purple-900">
+                  <div>
+                    <span className="font-bold block text-purple-900">📦 Full Course Fee Batch</span>
+                    <span>Total Batch Fee: ₹{totalFee} • Total Paid So Far: ₹{paidSum}</span>
+                  </div>
+                  <div className="text-right font-bold text-purple-700 text-sm">
+                    Remaining Balance: ₹{remaining}
+                  </div>
+                </div>
               );
-            })}
-          </select>
+            }
+            return null;
+          })()}
 
-          <select
-            value={form.month}
-            onChange={(e) => setForm({ ...form, month: e.target.value })}
-            className="border rounded-xl p-3"
-          >
-            {MONTHS.map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
+          {/* MONTH SELECT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Fee Month
+            </label>
+            <select
+              value={form.month}
+              onChange={(e) => setForm({ ...form, month: e.target.value })}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            >
+              {MONTHS.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
 
-          <input
-            type="number"
-            placeholder="Year"
-            value={form.year}
-            onChange={(e) => setForm({ ...form, year: e.target.value })}
-            className="border rounded-xl p-3"
-          />
+          {/* YEAR INPUT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Fee Year
+            </label>
+            <input
+              type="number"
+              placeholder="Year"
+              value={form.year}
+              onChange={(e) => setForm({ ...form, year: e.target.value })}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            />
+          </div>
 
-          <input
-            type="number"
-            placeholder="Amount"
-            value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            className="border rounded-xl p-3"
-          />
+          {/* AMOUNT INPUT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Amount (₹) *
+            </label>
+            <input
+              type="number"
+              placeholder="Amount"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              required
+            />
+          </div>
 
-          <select
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-            className="border rounded-xl p-3"
-          >
-            <option value="paid">Paid</option>
-            <option value="pending">Pending</option>
-          </select>
+          {/* STATUS SELECT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Payment Status
+            </label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+            >
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
 
-          <select
-            value={form.paymentMethod}
-            onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
-            className="border rounded-xl p-3"
-            disabled={form.status !== "paid"}
-          >
-            <option>Cash</option>
-            <option>UPI</option>
-            <option>Bank Transfer</option>
-            <option>Card</option>
-          </select>
+          {/* PAYMENT METHOD SELECT */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1">
+              Payment Method
+            </label>
+            <select
+              value={form.paymentMethod}
+              onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+              className="border rounded-xl px-3 h-[46px] w-full text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+              disabled={form.status !== "paid"}
+            >
+              <option>Cash</option>
+              <option>UPI</option>
+              <option>Bank Transfer</option>
+              <option>Card</option>
+            </select>
+          </div>
 
           {/* buttons */}
           <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
